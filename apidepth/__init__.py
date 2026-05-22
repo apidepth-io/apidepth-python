@@ -139,19 +139,57 @@ def sdk_metadata() -> Dict[str, Any]:
     """Return a metadata dict included in every batch payload.
 
     The metadata lets the collector correlate data-quality issues with
-    specific SDK versions and Python runtimes without requiring a support
-    ticket.
+    specific SDK versions, Python runtimes, and app servers without
+    requiring a support ticket.  Mirrors the Ruby gem's ``sdk_metadata``
+    which includes ``rails_version`` and ``app_server``.
 
     Returns:
-        A dict with keys ``name``, ``version``, ``python_version``, and
-        ``python_platform``.
+        A dict with keys ``name``, ``version``, ``python_version``,
+        ``python_platform``, and ``app_server``.
     """
     return {
         "name": "apidepth-python",
         "version": VERSION,
         "python_version": sys.version.split()[0],
         "python_platform": platform.platform(),
+        "app_server": _detect_app_server(),
     }
+
+
+def _detect_app_server() -> str:
+    """Detect the WSGI/ASGI server by inspecting already-loaded modules.
+
+    Uses ``sys.modules`` rather than attempting new imports so that the
+    detection is zero-cost and does not force-load server libraries as a
+    side-effect.  This mirrors the Ruby gem's ``detect_app_server`` which
+    uses ``defined?(Puma)`` / ``defined?(Unicorn)`` / ``defined?(PhusionPassenger)``.
+
+    Servers checked (in priority order):
+
+    * ``gunicorn``   — most common WSGI server
+    * ``uwsgi``      — uWSGI (the ``uwsgi`` C extension module)
+    * ``waitress``   — pure-Python WSGI server
+    * ``uvicorn``    — ASGI server (FastAPI, Starlette)
+    * ``hypercorn``  — ASGI server
+    * ``daphne``     — ASGI server (Django Channels)
+
+    Returns:
+        The lowercase server name, or ``"unknown"`` if none is detected.
+    """
+    mods = sys.modules
+    if "gunicorn" in mods:
+        return "gunicorn"
+    if "uwsgi" in mods:
+        return "uwsgi"
+    if "waitress" in mods:
+        return "waitress"
+    if "uvicorn" in mods:
+        return "uvicorn"
+    if "hypercorn" in mods:
+        return "hypercorn"
+    if "daphne" in mods:
+        return "daphne"
+    return "unknown"
 
 
 def sanitize_log(s: str) -> str:

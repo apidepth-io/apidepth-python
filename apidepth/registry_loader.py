@@ -113,7 +113,13 @@ def load_and_start() -> None:
     setups, but is not required — the bundled baseline is always active.
     """
     from apidepth.vendor_registry import VendorRegistry
+    from apidepth.collector import Collector
     import apidepth
+
+    # Register os.register_at_fork so forked workers (Gunicorn, uWSGI) each
+    # get a fresh Collector with its own flush thread.  Mirrors the Ruby gem's
+    # ActiveSupport::ForkTracker.after_fork hook registered in the Railtie.
+    Collector.register_fork_safety()
 
     config = apidepth.get_configuration()
     registry = _fetch_remote(config) or _load_from_disk(config)

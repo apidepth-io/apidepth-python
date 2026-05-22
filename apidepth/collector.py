@@ -94,6 +94,7 @@ class Collector:
 
     _instance: Optional["Collector"] = None
     _instance_lock = threading.Lock()
+    _fork_safety_registered: bool = False
 
     # ------------------------------------------------------------------
     # Singleton lifecycle
@@ -119,7 +120,12 @@ class Collector:
         own flush thread.  Without it, forked workers inherit the parent's
         stale singleton whose flush thread was not copied by ``fork()``.
 
-        Example (Gunicorn ``config.py``)::
+        :meth:`register_fork_safety` calls this automatically via
+        ``os.register_at_fork`` on POSIX platforms.  Manual calls are only
+        needed on Windows or inside server-specific hooks (e.g. uWSGI's
+        ``@postfork`` decorator).
+
+        Example (Gunicorn ``config.py``, only needed on Windows)::
 
             def post_fork(server, worker):
                 from apidepth.collector import Collector
@@ -129,6 +135,49 @@ class Collector:
             if cls._instance is not None:
                 cls._instance._teardown()
             cls._instance = None
+
+    @classmethod
+    def register_fork_safety(cls) -> None:
+        """Register a post-fork hook so each worker process gets its own Collector.
+
+        Uses :func:`os.register_at_fork` (Python 3.7+, POSIX only) to call
+        :meth:`reset` in the child process immediately after ``fork()``.
+        Without this, forked workers inherit the parent's stale singleton
+        whose background flush thread was not copied by ``os.fork()`` — events
+        recorded in workers would never be flushed.
+
+        Safe to call multiple times — only the first call registers the hook.
+
+        This mirrors the Ruby gem's ``ActiveSupport::ForkTracker.after_fork``
+        integration added in the Railtie (Rails 7.1+).
+
+        If ``os.register_at_fork`` is not available (Windows) *and* a forking
+        server is detected, a one-time warning is logged so the developer
+        knows to add a manual hook.
+        """
+        with cls._instance_lock:
+            if cls._fork_safety_registered:
+                return
+            try:
+                import os
+                os.register_at_fork(after_in_child=cls.reset)
+                cls._fork_safety_registered = True
+                _logger.debug("[Apidepth] Fork safety registered via os.register_at_fork")
+            except AttributeError:
+                # os.register_at_fork is POSIX-only; not available on Windows.
+                cls._fork_safety_registered = True  # mark done so we only warn once
+                import sys
+                mods = sys.modules
+                forking_server = next(
+                    (s for s in ("gunicorn", "uwsgi") if s in mods), None
+                )
+                if forking_server:
+                    _logger.warning(
+                        "[Apidepth] %s detected but os.register_at_fork is unavailable "
+                        "on this platform. Workers in multiprocess mode will not flush "
+                        "events. Add Collector.reset() to your server's post-fork hook.",
+                        forking_server,
+                    )
 
     # ------------------------------------------------------------------
     # Construction

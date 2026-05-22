@@ -1,5 +1,9 @@
 # apidepth-python
 
+[![PyPI](https://img.shields.io/pypi/v/apidepth)](https://pypi.org/project/apidepth/)
+[![Python](https://img.shields.io/pypi/pyversions/apidepth)](https://pypi.org/project/apidepth/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Track outbound API latency, error rates, and rate limit quota across your third-party vendors — Stripe, OpenAI, Anthropic, Twilio, GitHub, and more.
 
 Zero config for supported vendors. No code changes to your existing HTTP calls.

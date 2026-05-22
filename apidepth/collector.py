@@ -78,7 +78,7 @@ _PRIVATE_HOST_RE = re.compile(
     \A172\.(1[6-9]|2\d|3[01])\. |
     \A192\.168\.           |
     \A\[?::1\]?\Z          |
-    \A\[?fc                |
+    \A\[?f[cd]             |
     \A\[?fe80:
     """,
     re.VERBOSE | re.IGNORECASE,
@@ -554,6 +554,16 @@ def _validate_collector_url(parsed: ParseResult) -> None:
             f"Apidepth collector_url must use HTTPS (got {parsed.scheme!r}). "
             "HTTP connections are rejected to prevent SSRF and credential exposure."
         )
+
+    # urlparse misparsels unbracketed IPv6 (e.g. "https://fe80::1/...") — the
+    # hostname comes back as just "fe80". Detect the :: in the netloc directly.
+    netloc = parsed.netloc or ""
+    if "::" in netloc and not netloc.startswith("["):
+        raise ValueError(
+            "Apidepth collector_url must not target private, loopback, or link-local "
+            f"addresses (got {netloc!r})."
+        )
+
     host = (parsed.hostname or "").lower()
 
     # Expand pure-integer hosts (decimal IP notation, e.g. "2130706433")

@@ -59,15 +59,26 @@ Apidepth(app)
 
 ```python
 import apidepth
+from apidepth import registry_loader
 
 apidepth.configure(
     api_key=os.environ["APIDEPTH_API_KEY"],
     environment="production",
 )
-apidepth.instrument()   # call before any outbound HTTP
+apidepth.instrument()       # call before any outbound HTTP
+registry_loader.load_and_start()  # loads remote vendor registry + starts refresh thread
 
 import requests
 resp = requests.get("https://api.stripe.com/v1/charges/ch_abc123", ...)
+```
+
+`load_and_start()` fetches the latest vendor registry from the network (with a local disk cache fallback) and starts a background refresh thread. Without it, only the six bundled vendors are recognised. Django and Flask integrations call this automatically.
+
+For **Gunicorn / uWSGI**, call `Collector.register_fork_safety()` once before the server forks so each worker gets its own flush thread:
+
+```python
+from apidepth.collector import Collector
+Collector.register_fork_safety()
 ```
 
 ---

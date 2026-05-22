@@ -28,7 +28,7 @@ Flask config keys recognised by :meth:`Apidepth.init_app`:
 Key                        Type     Notes
 =========================  =======  =========================================
 ``APIDEPTH_API_KEY``       str      **Required.**
-``APIDEPTH_ENVIRONMENT``   str      Defaults to ``app.config["ENV"]``.
+``APIDEPTH_ENVIRONMENT``   str      Defaults to ``None``.
 ``APIDEPTH_SAMPLE_RATE``   float    0.0 – 1.0; default 1.0.
 ``APIDEPTH_FLUSH_INTERVAL``int      Seconds; default 20.
 ``APIDEPTH_IGNORED_HOSTS`` list     Hostnames to never record.
@@ -97,10 +97,6 @@ class Apidepth:
             val = app.config.get(flask_key)
             if val is not None:
                 setattr(config, attr, val)
-
-        # Fall back to Flask's own ENV setting if environment was not set explicitly.
-        if config.environment is None:
-            config.environment = app.config.get("ENV", "development")
 
         # Route SDK logs through Flask's app logger.
         apidepth.set_logger(logging.getLogger("apidepth"))

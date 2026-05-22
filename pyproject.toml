@@ -7,7 +7,7 @@ name = "apidepth"
 version = "0.1.0"
 description = "Apidepth SDK for Python — track outbound API latency, error rates, and rate limit quota."
 readme = "README.md"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 requires-python = ">=3.9"
 keywords = ["apidepth", "api", "monitoring", "observability", "http"]
 classifiers = [

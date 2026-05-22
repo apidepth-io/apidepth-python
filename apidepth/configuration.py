@@ -54,8 +54,9 @@ class Configuration:
 
         environment:
             Free-form deployment environment tag included in every event.
-            Framework integrations set this automatically from
-            ``Django.env`` / ``Flask.config["ENV"]``.
+            Set via ``apidepth.configure(environment=...)``,
+            ``APIDEPTH = {"environment": ...}`` in Django settings, or
+            ``APIDEPTH_ENVIRONMENT`` in Flask config.
             Example: ``"production"``, ``"staging"``.
 
         sample_rate:

@@ -71,7 +71,19 @@ def configure(**kwargs: Any) -> Configuration:
 
     Returns:
         The updated :class:`~apidepth.configuration.Configuration` singleton.
+
+    Raises:
+        TypeError: If an unknown configuration key is passed.
     """
+    from apidepth.configuration import Configuration as _Cfg
+    _valid = {k for k in vars(_Cfg()) if not k.startswith("_")}
+    unknown = set(kwargs) - _valid
+    if unknown:
+        raise TypeError(
+            f"apidepth.configure() got unexpected keyword argument(s): "
+            f"{', '.join(sorted(unknown))}. "
+            f"Valid options: {', '.join(sorted(_valid))}."
+        )
     config = get_configuration()
     for key, value in kwargs.items():
         setattr(config, key, value)

@@ -446,8 +446,8 @@ class Collector:
         body = json.dumps(payload, default=str).encode("utf-8")
         parsed = self._collector_url(config)
 
-        try:
-            with self._send_lock:
+        with self._send_lock:
+            try:
                 conn = self._get_conn(parsed)
                 conn.request(
                     "POST",
@@ -465,11 +465,11 @@ class Collector:
                     raise RuntimeError(
                         f"Collector returned HTTP {resp.status} — verify your api_key and collector_url"
                     )
-        except Exception:
-            # Always close on any exception so _get_conn builds a fresh
-            # connection on the next flush rather than retrying a broken socket.
-            self._close_conn()
-            raise
+            except Exception:
+                # Close while the lock is held so no other thread can receive
+                # this broken socket from _get_conn before it is nulled out.
+                self._close_conn()
+                raise
 
     def _collector_url(self, config: Any) -> ParseResult:
         """Parse and validate the collector URL, memoising the result.

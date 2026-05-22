@@ -102,7 +102,7 @@ Every outbound HTTP request to a recognised vendor produces one event:
 | `status` | `200` |
 | `outcome` | `"success"` / `"client_error"` / `"server_error"` / `"timeout"` |
 | `duration_ms` | `234` |
-| `cold_start` | `false` |
+| `cold_start` | `false` (always — see [Known differences](#known-differences-from-the-ruby-gem)) |
 | `env` | `"production"` |
 | `ts` | `1747008000000` (epoch ms) |
 | `rl_remaining` | `4999` (when rate limit headers present) |
@@ -180,3 +180,23 @@ print(Collector.instance().stats())
 ## Python compatibility
 
 Python 3.9–3.13. No required runtime dependencies (stdlib only). `requests` and `httpx` are optional instrumentation targets detected at runtime.
+
+---
+
+## Known differences from the Ruby gem
+
+### `cold_start` is always `false`
+
+The Ruby gem tags the **first** outbound request on each TCP connection with `cold_start: true` using `Net::HTTP#started?`. The Apidepth collector uses this flag to exclude DNS + TCP + TLS handshake overhead from latency percentile calculations (p50/p95/p99), keeping those metrics representative of steady-state vendor performance.
+
+Neither `requests` (backed by urllib3) nor `httpx` exposes a public API for detecting whether the underlying socket is a keep-alive reuse. The Python SDK therefore always sends `cold_start: false`.
+
+**Practical impact depends on your traffic pattern:**
+
+| Traffic pattern | Impact |
+|---|---|
+| High-throughput web service | **Negligible** — cold starts are a tiny fraction of total requests; percentile inflation is unmeasurable |
+| Low-throughput service / cron job | **Noticeable** — the first request per run pays ~50–200 ms of connection overhead that isn't excluded from percentiles; p95/p99 may read slightly higher than in Ruby |
+| Serverless / short-lived worker | **Material** — every invocation starts cold; all latency data includes connection overhead; comparisons against Ruby-instrumented services will show the Python side as systematically higher |
+
+The raw duration values are accurate — only the percentile statistics are affected. If cold-start exclusion matters for your environment, filter those events manually in your dashboard (e.g. a warm-up request flag in thread-local state) until the underlying libraries expose the required connection-state API.

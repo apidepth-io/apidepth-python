@@ -28,6 +28,37 @@ Idempotency
 -----------
 :func:`instrument` is safe to call multiple times — a module-level boolean
 per library prevents double-patching.
+
+Known divergence from the Ruby gem
+------------------------------------
+The Ruby gem detects cold starts via ``Net::HTTP#started?``: it tags the
+**first** request on a fresh connection with ``cold_start: true`` so the
+Apidepth collector can exclude DNS + TCP + TLS handshake overhead from
+latency percentile calculations (p50 / p95 / p99).
+
+Neither *requests* (backed by urllib3's ``PoolManager``) nor *httpx* exposes
+a public API for inspecting whether the underlying socket is a reused
+keep-alive connection.  Accessing private internals would be fragile across
+library versions and minor releases, so the Python SDK always sends
+``cold_start: False``.
+
+Impact by traffic pattern:
+
+* **High-throughput web services** — Negligible.  Cold starts are a tiny
+  fraction of total requests; percentile inflation is unmeasurable.
+* **Low-throughput services / cron jobs** — Noticeable.  The first request
+  in each run pays DNS + TCP + TLS overhead (~50–200 ms extra) but is not
+  excluded from percentile calculations.  p95/p99 may read slightly worse
+  than the Ruby-instrumented equivalent.
+* **Serverless / short-lived workers** — Material.  Every invocation starts
+  cold; all latency data includes connection overhead.  Absolute durations
+  are still accurate; comparisons against Ruby-instrumented services will
+  show the Python side as systematically higher.
+
+If cold-start exclusion is important for your environment, instrument a
+custom metric (e.g. first-request flag set in a thread-local) and filter
+those events in your dashboard until the underlying libraries expose the
+required connection-state API.
 """
 from __future__ import annotations
 
@@ -296,6 +327,9 @@ def _record_success(
             "status": status,
             "outcome": outcome,
             "duration_ms": duration_ms,
+            # Always False — neither requests nor httpx exposes a public API to
+            # detect keep-alive connection reuse (Ruby uses Net::HTTP#started?).
+            # See the module docstring for impact details.
             "cold_start": False,
             "env": _resolve_env(),
             "ts": now_ms,
@@ -360,6 +394,7 @@ def _record_timeout_if_applicable(
             "outcome": "timeout",
             "error_class": type(exc).__name__,
             "duration_ms": duration_ms,
+            # Always False — see module docstring for the cold_start limitation.
             "cold_start": False,
             "env": _resolve_env(),
             "ts": _now_ms(),

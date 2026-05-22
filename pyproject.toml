@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "apidepth"
+version = "0.1.0"
+description = "Apidepth SDK for Python — track outbound API latency, error rates, and rate limit quota."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+keywords = ["apidepth", "api", "monitoring", "observability", "http"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: System :: Monitoring",
+]
+
+# No required runtime dependencies — stdlib only.
+# requests and httpx are optional instrumentation targets.
+dependencies = []
+
+[project.optional-dependencies]
+requests = ["requests>=2.20"]
+httpx = ["httpx>=0.23"]
+django = ["django>=3.2"]
+flask = ["flask>=2.0"]
+all = ["requests>=2.20", "httpx>=0.23"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "requests>=2.20",
+    "httpx>=0.23",
+    "responses>=0.25",
+    "respx>=0.21",
+]
+
+[project.urls]
+Homepage = "https://www.apidepth.io"
+Source = "https://github.com/apidepth/apidepth-python"
+Issues = "https://github.com/apidepth/apidepth-python/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apidepth"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"

@@ -1,13 +1,44 @@
+"""HTTP client instrumentation for the Apidepth SDK.
+
+Monkey-patching strategy
+------------------------
+The SDK intercepts outbound HTTP requests by replacing the ``send`` method
+on the adapter/transport layer of each supported library.  This is equivalent
+to Ruby's ``Module#prepend`` on ``Net::HTTP``.
+
+Supported libraries (detected at runtime; each is optional):
+
+* **requests** — ``requests.adapters.HTTPAdapter.send`` is replaced.
+  All ``Session``-based and top-level ``requests.get / .post / …`` calls
+  go through this path.
+
+* **httpx** — ``httpx.Client.send`` *and* ``httpx.AsyncClient.send`` are
+  replaced so both sync and async usage is covered.
+
+Recursion guard
+---------------
+The :class:`~apidepth.collector.Collector` uses ``http.client`` directly
+to send batches, so it is never affected by this patching.  However, any
+code that uses *requests* or *httpx* to call the collector endpoint would
+recurse.  A :class:`threading.local` flag (``_skip.value``) is checked at
+the top of every patched method; the :class:`~apidepth.collector.Collector`
+sets it to ``True`` before sending and clears it in a ``finally`` block.
+
+Idempotency
+-----------
+:func:`instrument` is safe to call multiple times — a module-level boolean
+per library prevents double-patching.
+"""
 from __future__ import annotations
 
 import random
 import threading
 import time
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-# Thread-local flag: set True while the collector is sending to prevent
-# the instrumentation from recording its own outbound requests.
+# Thread-local flag: set True while the Collector is sending its own HTTP
+# request so the patched send method is a transparent pass-through.
 _skip = threading.local()
 
 _requests_patched = False
@@ -15,11 +46,15 @@ _httpx_patched = False
 
 
 def instrument() -> None:
-    """Monkey-patch installed HTTP clients.
+    """Monkey-patch all installed HTTP client libraries.
 
-    Safe to call multiple times — subsequent calls are no-ops.
-    Patches requests.adapters.HTTPAdapter and httpx.Client/AsyncClient
-    when those libraries are installed.
+    Patches *requests* and *httpx* if they are importable.  Libraries that
+    are not installed are silently skipped.  Safe to call multiple times —
+    subsequent calls after the first are no-ops.
+
+    Call this once at application startup **after** :func:`apidepth.configure`.
+    Framework integrations (Django, Flask) call it automatically inside their
+    boot hooks.
     """
     _patch_requests()
     _patch_httpx()
@@ -30,6 +65,12 @@ def instrument() -> None:
 # ---------------------------------------------------------------------------
 
 def _patch_requests() -> None:
+    """Replace ``requests.adapters.HTTPAdapter.send`` with the instrumented version.
+
+    Wraps the original method in a closure so the original is always
+    reachable even if the attribute is later replaced by other middleware.
+    Sets ``_requests_patched = True`` only after a successful replacement.
+    """
     global _requests_patched
     if _requests_patched:
         return
@@ -42,6 +83,15 @@ def _patch_requests() -> None:
 
     def _patched_send(adapter_self, request, stream=False, timeout=None,
                       verify=True, cert=None, proxies=None):
+        """Instrumented replacement for ``HTTPAdapter.send``.
+
+        Early-exit conditions (evaluated cheapest-first):
+
+        1. Recursion guard — we are inside our own collector flush.
+        2. SDK disabled via ``Configuration.enabled``.
+        3. Host is on ``Configuration.ignored_hosts``.
+        4. Probabilistic sampling — request not selected this tick.
+        """
         if getattr(_skip, "value", False):
             return original(adapter_self, request, stream=stream, timeout=timeout,
                             verify=verify, cert=cert, proxies=proxies)
@@ -69,82 +119,29 @@ def _patch_requests() -> None:
             response = original(adapter_self, request, stream=stream, timeout=timeout,
                                 verify=verify, cert=cert, proxies=proxies)
             duration_ms = _elapsed_ms(start)
-            _record_event_requests(request, response, duration_ms, host, parsed.path or "/")
+            _record_success(
+                method=request.method.upper(),
+                host=host,
+                path=parsed.path or "/",
+                status=response.status_code,
+                headers=dict(response.headers),
+                duration_ms=duration_ms,
+            )
             return response
         except Exception as exc:
             duration_ms = _elapsed_ms(start)
-            _record_timeout_requests(request, exc, duration_ms, host, parsed.path or "/")
+            _record_timeout_if_applicable(
+                exc=exc,
+                method=request.method.upper(),
+                host=host,
+                path=parsed.path or "/",
+                duration_ms=duration_ms,
+                is_requests_timeout=True,
+            )
             raise
 
     requests.adapters.HTTPAdapter.send = _patched_send  # type: ignore[method-assign]
     _requests_patched = True
-
-
-def _record_event_requests(request: Any, response: Any, duration_ms: int,
-                           host: str, path: str) -> None:
-    try:
-        from apidepth.vendor_registry import VendorRegistry
-        result = VendorRegistry.identify(host, path)
-        if result is None:
-            return
-        vendor, endpoint = result
-
-        status = response.status_code
-        outcome = _outcome_from_status(status)
-
-        now_ms = _now_ms()
-        from apidepth.rate_limit_headers import extract as extract_rl
-        rl = extract_rl(dict(response.headers), now_ms)
-
-        import apidepth
-        from apidepth import collector, event
-        collector.Collector.instance().record(event.build({
-            "vendor": vendor,
-            "endpoint": endpoint,
-            "method": request.method.upper(),
-            "status": status,
-            "outcome": outcome,
-            "duration_ms": duration_ms,
-            "cold_start": False,
-            "env": _resolve_env(),
-            "ts": now_ms,
-            **(rl or {}),
-        }))
-    except Exception:
-        pass
-
-
-def _record_timeout_requests(request: Any, exc: Exception, duration_ms: int,
-                              host: str, path: str) -> None:
-    try:
-        import requests.exceptions
-        if not isinstance(exc, (requests.exceptions.Timeout,
-                                requests.exceptions.ConnectTimeout,
-                                requests.exceptions.ReadTimeout)):
-            return
-
-        from apidepth.vendor_registry import VendorRegistry
-        result = VendorRegistry.identify(host, path)
-        if result is None:
-            return
-        vendor, endpoint = result
-
-        import apidepth
-        from apidepth import collector, event
-        collector.Collector.instance().record(event.build({
-            "vendor": vendor,
-            "endpoint": endpoint,
-            "method": request.method.upper(),
-            "status": None,
-            "outcome": "timeout",
-            "error_class": type(exc).__name__,
-            "duration_ms": duration_ms,
-            "cold_start": False,
-            "env": _resolve_env(),
-            "ts": _now_ms(),
-        }))
-    except Exception:
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +149,12 @@ def _record_timeout_requests(request: Any, exc: Exception, duration_ms: int,
 # ---------------------------------------------------------------------------
 
 def _patch_httpx() -> None:
+    """Replace ``httpx.Client.send`` and ``httpx.AsyncClient.send``.
+
+    Both sync and async clients share the same recording helpers so the
+    logic is not duplicated.  The async replacement is a native ``async def``
+    so it can be awaited correctly.
+    """
     global _httpx_patched
     if _httpx_patched:
         return
@@ -164,6 +167,7 @@ def _patch_httpx() -> None:
     original_async = httpx.AsyncClient.send
 
     def _patched_sync_send(client_self, request, **kwargs):
+        """Instrumented replacement for ``httpx.Client.send`` (sync)."""
         if getattr(_skip, "value", False):
             return original_sync(client_self, request, **kwargs)
 
@@ -178,14 +182,29 @@ def _patch_httpx() -> None:
         try:
             response = original_sync(client_self, request, **kwargs)
             duration_ms = _elapsed_ms(start)
-            _record_event_httpx(request, response, duration_ms, host, str(request.url.path))
+            _record_success(
+                method=request.method.upper(),
+                host=host,
+                path=str(request.url.path),
+                status=response.status_code,
+                headers=dict(response.headers),
+                duration_ms=duration_ms,
+            )
             return response
         except Exception as exc:
             duration_ms = _elapsed_ms(start)
-            _record_timeout_httpx(request, exc, duration_ms, host, str(request.url.path))
+            _record_timeout_if_applicable(
+                exc=exc,
+                method=request.method.upper(),
+                host=host,
+                path=str(request.url.path),
+                duration_ms=duration_ms,
+                is_requests_timeout=False,
+            )
             raise
 
     async def _patched_async_send(client_self, request, **kwargs):
+        """Instrumented replacement for ``httpx.AsyncClient.send`` (async)."""
         if getattr(_skip, "value", False):
             return await original_async(client_self, request, **kwargs)
 
@@ -200,11 +219,25 @@ def _patch_httpx() -> None:
         try:
             response = await original_async(client_self, request, **kwargs)
             duration_ms = _elapsed_ms(start)
-            _record_event_httpx(request, response, duration_ms, host, str(request.url.path))
+            _record_success(
+                method=request.method.upper(),
+                host=host,
+                path=str(request.url.path),
+                status=response.status_code,
+                headers=dict(response.headers),
+                duration_ms=duration_ms,
+            )
             return response
         except Exception as exc:
             duration_ms = _elapsed_ms(start)
-            _record_timeout_httpx(request, exc, duration_ms, host, str(request.url.path))
+            _record_timeout_if_applicable(
+                exc=exc,
+                method=request.method.upper(),
+                host=host,
+                path=str(request.url.path),
+                duration_ms=duration_ms,
+                is_requests_timeout=False,
+            )
             raise
 
     httpx.Client.send = _patched_sync_send  # type: ignore[method-assign]
@@ -212,8 +245,36 @@ def _patch_httpx() -> None:
     _httpx_patched = True
 
 
-def _record_event_httpx(request: Any, response: Any, duration_ms: int,
-                        host: str, path: str) -> None:
+# ---------------------------------------------------------------------------
+# Shared recording helpers
+# ---------------------------------------------------------------------------
+
+def _record_success(
+    *,
+    method: str,
+    host: str,
+    path: str,
+    status: int,
+    headers: Dict[str, str],
+    duration_ms: int,
+) -> None:
+    """Build and enqueue a successful-response event.
+
+    Identifies the vendor from *host*, normalises *path*, extracts any
+    rate-limit headers, then hands the assembled event dict to
+    :meth:`~apidepth.collector.Collector.record`.
+
+    All exceptions are swallowed so instrumentation can never crash the
+    caller's code path.
+
+    Args:
+        method: Uppercase HTTP method (e.g. ``"POST"``).
+        host: Bare hostname of the request (e.g. ``"api.stripe.com"``).
+        path: Request path, query string already stripped by the caller.
+        status: HTTP response status code.
+        headers: Response headers as a plain ``dict``.
+        duration_ms: Wall-clock request duration in milliseconds.
+    """
     try:
         from apidepth.vendor_registry import VendorRegistry
         result = VendorRegistry.identify(host, path)
@@ -221,18 +282,17 @@ def _record_event_httpx(request: Any, response: Any, duration_ms: int,
             return
         vendor, endpoint = result
 
-        status = response.status_code
         outcome = _outcome_from_status(status)
         now_ms = _now_ms()
 
         from apidepth.rate_limit_headers import extract as extract_rl
-        rl = extract_rl(dict(response.headers), now_ms)
+        rl = extract_rl(headers, now_ms)
 
         from apidepth import collector, event
         collector.Collector.instance().record(event.build({
             "vendor": vendor,
             "endpoint": endpoint,
-            "method": request.method.upper(),
+            "method": method,
             "status": status,
             "outcome": outcome,
             "duration_ms": duration_ms,
@@ -245,12 +305,45 @@ def _record_event_httpx(request: Any, response: Any, duration_ms: int,
         pass
 
 
-def _record_timeout_httpx(request: Any, exc: Exception, duration_ms: int,
-                          host: str, path: str) -> None:
+def _record_timeout_if_applicable(
+    *,
+    exc: Exception,
+    method: str,
+    host: str,
+    path: str,
+    duration_ms: int,
+    is_requests_timeout: bool,
+) -> None:
+    """Build and enqueue a timeout event if *exc* is a recognised timeout type.
+
+    Timeouts are a leading indicator of vendor degradation — they appear
+    before the vendor acknowledges an incident.  The event is always
+    re-raised by the caller so the application's own error handling is
+    unaffected.
+
+    Args:
+        exc: The exception that was raised by the HTTP client.
+        method: Uppercase HTTP method.
+        host: Bare hostname of the request.
+        path: Request path.
+        duration_ms: Wall-clock request duration at the time of the exception.
+        is_requests_timeout: ``True`` when called from the *requests* patch;
+            ``False`` when called from the *httpx* patch.  Controls which
+            exception classes are considered timeouts.
+    """
     try:
-        import httpx
-        if not isinstance(exc, httpx.TimeoutException):
-            return
+        if is_requests_timeout:
+            import requests.exceptions
+            if not isinstance(exc, (
+                requests.exceptions.Timeout,
+                requests.exceptions.ConnectTimeout,
+                requests.exceptions.ReadTimeout,
+            )):
+                return
+        else:
+            import httpx
+            if not isinstance(exc, httpx.TimeoutException):
+                return
 
         from apidepth.vendor_registry import VendorRegistry
         result = VendorRegistry.identify(host, path)
@@ -262,7 +355,7 @@ def _record_timeout_httpx(request: Any, exc: Exception, duration_ms: int,
         collector.Collector.instance().record(event.build({
             "vendor": vendor,
             "endpoint": endpoint,
-            "method": request.method.upper(),
+            "method": method,
             "status": None,
             "outcome": "timeout",
             "error_class": type(exc).__name__,
@@ -276,18 +369,29 @@ def _record_timeout_httpx(request: Any, exc: Exception, duration_ms: int,
 
 
 # ---------------------------------------------------------------------------
-# Shared helpers
+# Shared utility helpers
 # ---------------------------------------------------------------------------
 
 def _elapsed_ms(start: float) -> int:
+    """Return milliseconds elapsed since *start* (a ``time.monotonic()`` value)."""
     return round((time.monotonic() - start) * 1000)
 
 
 def _now_ms() -> int:
+    """Return the current epoch time in milliseconds."""
     return int(time.time() * 1000)
 
 
 def _outcome_from_status(status: Optional[int]) -> str:
+    """Map an HTTP status code to an Apidepth outcome string.
+
+    Args:
+        status: HTTP status code, or ``None`` for timeout events.
+
+    Returns:
+        One of ``"success"``, ``"client_error"``, ``"server_error"``, or
+        ``"unknown"``.
+    """
     if status is None:
         return "unknown"
     if 200 <= status <= 299:
@@ -300,11 +404,20 @@ def _outcome_from_status(status: Optional[int]) -> str:
 
 
 def _sampled(config: Any) -> bool:
+    """Return ``True`` if this request should be recorded given the sample rate.
+
+    At ``sample_rate = 1.0`` (default) this always returns ``True`` without
+    calling ``random.random()``.
+
+    Args:
+        config: The current :class:`~apidepth.configuration.Configuration`.
+    """
     rate = config.sample_rate
     return rate >= 1.0 or random.random() < rate
 
 
 def _resolve_env() -> str:
+    """Return the configured deployment environment tag, defaulting to ``"unknown"``."""
     try:
         import apidepth
         return apidepth.get_configuration().environment or "unknown"

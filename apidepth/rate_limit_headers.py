@@ -1,37 +1,100 @@
+"""Rate-limit quota extraction from HTTP response headers.
+
+Normalises three distinct header families into three canonical event fields:
+
+``rl_remaining``
+    Requests remaining in the current window (integer ≥ 0).
+
+``rl_limit``
+    Total quota for the window (integer ≥ 0).
+
+``rl_reset_at``
+    When the window resets, expressed as epoch **milliseconds** (integer).
+
+WHY in the SDK rather than the collector?
+Response headers are only visible at the HTTP call site.  By the time an
+event reaches the collector only the status code and duration are known;
+header data would have to be forwarded verbatim, adding payload size for
+every request.  Extracting and normalising here keeps the event schema
+stable and the payload small.
+
+Returns ``None`` when none of the recognised headers are present so the
+caller can omit the ``rl_*`` fields entirely rather than sending nulls.
+
+Header priority order (first match per field wins):
+
+Remaining
+  1. ``x-ratelimit-remaining-requests``  (OpenAI / Anthropic)
+  2. ``x-ratelimit-remaining``           (GitHub)
+  3. ``ratelimit-remaining``             (IETF draft, HubSpot, Fastly)
+
+Limit
+  1. ``x-ratelimit-limit-requests``      (OpenAI / Anthropic)
+  2. ``x-ratelimit-limit``               (GitHub)
+  3. ``ratelimit-limit``                 (IETF draft)
+
+Reset
+  1. ``x-ratelimit-reset-requests``      (OpenAI — duration string format)
+  2. ``x-ratelimit-reset``               (GitHub — Unix timestamp seconds)
+  3. ``ratelimit-reset``                 (IETF draft)
+  4. ``retry-after``                     (Stripe / generic 429 fallback)
+"""
 from __future__ import annotations
 
 import re
-from typing import Dict, Mapping, Optional
+from typing import Dict, List, Mapping, Optional
 
-# Checked in priority order per field — first match wins.
-_REMAINING_HEADERS = [
+# ---------------------------------------------------------------------------
+# Header name priority lists
+# ---------------------------------------------------------------------------
+
+_REMAINING_HEADERS: List[str] = [
     "x-ratelimit-remaining-requests",
     "x-ratelimit-remaining",
     "ratelimit-remaining",
 ]
 
-_LIMIT_HEADERS = [
+_LIMIT_HEADERS: List[str] = [
     "x-ratelimit-limit-requests",
     "x-ratelimit-limit",
     "ratelimit-limit",
 ]
 
-_RESET_HEADERS = [
+_RESET_HEADERS: List[str] = [
     "x-ratelimit-reset-requests",
     "x-ratelimit-reset",
     "ratelimit-reset",
     "retry-after",
 ]
 
+# Matches a bare non-negative number, optionally with a decimal component.
+# Used to distinguish numeric values ("30", "1716000000") from duration
+# strings ("1s", "1m30s").
 _NUMERIC_RE = re.compile(r"\A\d+(?:\.\d+)?\Z")
+
+# Captures one component of an OpenAI-style duration string.
+# Groups: (value, unit) where unit is h | m (not ms) | s | ms.
+# The negative lookahead (?!s) distinguishes "m" (minute) from "ms".
 _DURATION_RE = re.compile(r"([\d.]+)(h|m(?!s)|s|ms)")
 
 
 def extract(headers: Mapping[str, str], now_ms: int) -> Optional[Dict[str, int]]:
-    """Extract rate limit quota state from HTTP response headers.
+    """Extract rate-limit quota fields from an HTTP response header mapping.
 
-    Returns a dict with rl_remaining, rl_limit, rl_reset_at (all optional),
-    or None when no recognised headers are present.
+    Args:
+        headers: Response headers, typically ``response.headers`` from
+            *requests* or *httpx*.  Header names are matched
+            case-insensitively when the mapping supports it (both libraries
+            return case-insensitive dicts by default).
+        now_ms: Current epoch time in milliseconds.  Used as the reference
+            point when converting relative reset values (seconds-from-now,
+            duration strings) to absolute epoch milliseconds.
+
+    Returns:
+        A dict containing any combination of ``rl_remaining`` (int),
+        ``rl_limit`` (int), and ``rl_reset_at`` (int epoch ms), or
+        ``None`` if none of the recognised headers are present.  Fields
+        with no matching header are omitted rather than set to ``None``.
     """
     remaining = _find_integer(headers, _REMAINING_HEADERS)
     limit = _find_integer(headers, _LIMIT_HEADERS)
@@ -50,7 +113,21 @@ def extract(headers: Mapping[str, str], now_ms: int) -> Optional[Dict[str, int]]
     return result
 
 
-def _find_integer(headers: Mapping[str, str], names: list) -> Optional[int]:
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+def _find_integer(headers: Mapping[str, str], names: List[str]) -> Optional[int]:
+    """Return the first non-negative integer found across *names* in *headers*.
+
+    Args:
+        headers: Response header mapping.
+        names: Header names to check, in priority order.
+
+    Returns:
+        The parsed integer value, or ``None`` if no header matches or all
+        matched values fail to parse as a non-negative integer.
+    """
     for name in names:
         val = headers.get(name)
         if val is None:
@@ -64,7 +141,19 @@ def _find_integer(headers: Mapping[str, str], names: list) -> Optional[int]:
     return None
 
 
-def _find_reset_ms(headers: Mapping[str, str], names: list, now_ms: int) -> Optional[int]:
+def _find_reset_ms(headers: Mapping[str, str], names: List[str], now_ms: int) -> Optional[int]:
+    """Return the first parseable reset time found across *names* as epoch ms.
+
+    Args:
+        headers: Response header mapping.
+        names: Header names to check, in priority order.
+        now_ms: Current epoch time in milliseconds, used as the reference
+            point for relative reset values.
+
+    Returns:
+        Epoch milliseconds for the reset time, or ``None`` if no header
+        matches or no value can be normalised.
+    """
     for name in names:
         val = headers.get(name)
         if val is None:
@@ -79,9 +168,26 @@ def _normalize_reset_ms(s: str, now_ms: int) -> Optional[int]:
     """Normalise a rate-limit reset value to epoch milliseconds.
 
     Handles three formats:
-      Unix timestamp  — integer > 1_000_000_000  (e.g. "1716000000")
-      Seconds-from-now — small integer            (e.g. "30" from Retry-After)
-      OpenAI duration  — string like "1s", "20ms", "1m30s", "2h"
+
+    Unix timestamp
+        A large integer (> 1 000 000 000) interpreted as seconds since the
+        Unix epoch, e.g. ``"1716000000"`` → multiplied by 1 000.
+
+    Seconds-from-now
+        A small non-negative integer, e.g. ``"30"`` from a ``Retry-After``
+        header → *now_ms* + 30 000.
+
+    OpenAI duration string
+        A compound string like ``"1s"``, ``"20ms"``, ``"1m30s"``, ``"2h"``
+        → parsed by :func:`_parse_duration_ms` then added to *now_ms*.
+
+    Args:
+        s: Stripped header value string.
+        now_ms: Current epoch time in milliseconds.
+
+    Returns:
+        Epoch milliseconds, or ``None`` if the value cannot be parsed in
+        any of the three formats.
     """
     if _NUMERIC_RE.match(s):
         n = float(s)
@@ -94,9 +200,32 @@ def _normalize_reset_ms(s: str, now_ms: int) -> Optional[int]:
 
 
 def _parse_duration_ms(s: str) -> Optional[int]:
-    """Parse an OpenAI-style duration string to milliseconds.
+    """Parse an OpenAI-style duration string into milliseconds.
 
-    Examples: "1s" → 1000, "20ms" → 20, "1m30s" → 90000, "2h" → 7200000
+    Recognises the following units (combinable, e.g. ``"1m30s"``):
+
+    =====  =============================
+    Unit   Meaning
+    =====  =============================
+    ``h``  hours
+    ``m``  minutes (not ``ms``)
+    ``s``  seconds
+    ``ms`` milliseconds
+    =====  =============================
+
+    Args:
+        s: Duration string, e.g. ``"1s"``, ``"20ms"``, ``"1m30s"``, ``"2h"``.
+
+    Returns:
+        Total milliseconds as an integer, or ``None`` if the string contains
+        no recognised unit tokens or the total is zero.
+
+    Examples::
+
+        _parse_duration_ms("1s")     # → 1000
+        _parse_duration_ms("20ms")   # → 20
+        _parse_duration_ms("1m30s")  # → 90000
+        _parse_duration_ms("2h")     # → 7200000
     """
     total = 0
     found = False

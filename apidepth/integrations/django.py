@@ -75,8 +75,12 @@ class ApidepthConfig(AppConfig):
             apidepth_settings = getattr(django_settings, "APIDEPTH", {})
             for key, value in apidepth_settings.items():
                 setattr(config, key, value)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger("apidepth").warning(
+                "[Apidepth] Failed to apply APIDEPTH settings: %s. "
+                "Check your settings.py for invalid keys or values.",
+                exc,
+            )
 
         # --- 2. Route SDK logs through Django's logging system -----------------
         apidepth.set_logger(logging.getLogger("apidepth"))

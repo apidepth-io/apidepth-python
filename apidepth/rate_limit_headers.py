@@ -240,6 +240,6 @@ def _parse_duration_ms(s: str) -> Optional[int]:
             total += int(v * 1_000)
         elif unit == "ms":
             total += int(v)
-    if found and total > 0:
+    if found:
         return total
     return None

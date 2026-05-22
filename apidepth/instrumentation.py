@@ -18,11 +18,8 @@ Supported libraries (detected at runtime; each is optional):
 Recursion guard
 ---------------
 The :class:`~apidepth.collector.Collector` uses ``http.client`` directly
-to send batches, so it is never affected by this patching.  However, any
-code that uses *requests* or *httpx* to call the collector endpoint would
-recurse.  A :class:`threading.local` flag (``_skip.value``) is checked at
-the top of every patched method; the :class:`~apidepth.collector.Collector`
-sets it to ``True`` before sending and clears it in a ``finally`` block.
+(never *requests* or *httpx*) so the patched methods are never on its call
+path.  Recursion is prevented architecturally, not by a flag.
 
 Idempotency
 -----------
@@ -63,14 +60,9 @@ required connection-state API.
 from __future__ import annotations
 
 import random
-import threading
 import time
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
-
-# Thread-local flag: set True while the Collector is sending its own HTTP
-# request so the patched send method is a transparent pass-through.
-_skip = threading.local()
 
 _requests_patched = False
 _httpx_patched = False
@@ -123,10 +115,6 @@ def _patch_requests() -> None:
         3. Host is on ``Configuration.ignored_hosts``.
         4. Probabilistic sampling — request not selected this tick.
         """
-        if getattr(_skip, "value", False):
-            return original(adapter_self, request, stream=stream, timeout=timeout,
-                            verify=verify, cert=cert, proxies=proxies)
-
         import apidepth
         config = apidepth.get_configuration()
 
@@ -199,9 +187,6 @@ def _patch_httpx() -> None:
 
     def _patched_sync_send(client_self, request, **kwargs):
         """Instrumented replacement for ``httpx.Client.send`` (sync)."""
-        if getattr(_skip, "value", False):
-            return original_sync(client_self, request, **kwargs)
-
         import apidepth
         config = apidepth.get_configuration()
         host = str(request.url.host)
@@ -236,9 +221,6 @@ def _patch_httpx() -> None:
 
     async def _patched_async_send(client_self, request, **kwargs):
         """Instrumented replacement for ``httpx.AsyncClient.send`` (async)."""
-        if getattr(_skip, "value", False):
-            return await original_async(client_self, request, **kwargs)
-
         import apidepth
         config = apidepth.get_configuration()
         host = str(request.url.host)

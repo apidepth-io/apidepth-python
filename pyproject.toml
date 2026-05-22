@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "apidepth"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Apidepth SDK for Python — track outbound API latency, error rates, and rate limit quota."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -33,7 +33,7 @@ requests = ["requests>=2.20"]
 httpx = ["httpx>=0.23"]
 django = ["django>=3.2"]
 flask = ["flask>=2.0"]
-all = ["requests>=2.20", "httpx>=0.23"]
+all = ["requests>=2.20", "httpx>=0.23", "django>=3.2", "flask>=2.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -48,6 +48,9 @@ dev = [
 Homepage = "https://www.apidepth.io"
 Source = "https://github.com/apidepth/apidepth-python"
 Issues = "https://github.com/apidepth/apidepth-python/issues"
+
+[tool.hatch.version]
+path = "apidepth/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["apidepth"]

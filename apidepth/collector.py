@@ -73,6 +73,7 @@ _PRIVATE_HOST_RE = re.compile(
     \Alocalhost\Z          |
     \A127\.                |
     \A0\.0\.0\.0\Z         |
+    \A0\Z                  |
     \A169\.254\.           |
     \A10\.                 |
     \A172\.(1[6-9]|2\d|3[01])\. |
@@ -241,7 +242,8 @@ class Collector:
             with self._stats_lock:
                 self._consecutive_failures += 1
                 failures = self._consecutive_failures
-            self._invoke_error_callback(exc, len(events), failures)
+                total_dropped = self._total_dropped
+            self._invoke_error_callback(exc, len(events), failures, total_dropped)
             _logger.warning("[Apidepth] Final flush failed: %s: %s", type(exc).__name__, exc)
 
     def stats(self) -> Dict[str, Any]:
@@ -311,12 +313,13 @@ class Collector:
                 self._start_flush_thread()
 
     def _teardown(self) -> None:
-        """Close the persistent HTTP connection.
+        """Close the persistent HTTP connection and unregister the atexit handler.
 
         Called by :meth:`reset` before the singleton is cleared.  Background
         threads are daemon threads and will be garbage-collected naturally;
         there is no need to join them here.
         """
+        atexit.unregister(self.flush)
         self._close_conn()
 
     def _flush_interval(self) -> int:
@@ -354,7 +357,8 @@ class Collector:
             with self._stats_lock:
                 self._consecutive_failures += 1
                 failures = self._consecutive_failures
-            self._invoke_error_callback(exc, len(events), failures)
+                total_dropped = self._total_dropped
+            self._invoke_error_callback(exc, len(events), failures, total_dropped)
             if failures >= FAILURE_THRESHOLD:
                 _logger.warning(
                     "[Apidepth] Flush has failed %d times consecutively. "
@@ -376,7 +380,7 @@ class Collector:
                 break
         return events
 
-    def _invoke_error_callback(self, exc: Exception, dropped: int, failures: int) -> None:
+    def _invoke_error_callback(self, exc: Exception, dropped: int, failures: int, total_dropped: int) -> None:
         """Call ``Configuration.on_flush_error`` if one is configured.
 
         All exceptions raised inside the callback are swallowed — the
@@ -386,6 +390,7 @@ class Collector:
             exc: The exception that caused the flush to fail.
             dropped: Number of events in the failed batch.
             failures: Current consecutive failure count (after incrementing).
+            total_dropped: Snapshot of total dropped events taken under the stats lock.
         """
         try:
             import apidepth
@@ -394,7 +399,7 @@ class Collector:
                 cb(exc, {
                     "dropped_events": dropped,
                     "consecutive_failures": failures,
-                    "total_dropped": self._total_dropped,
+                    "total_dropped": total_dropped,
                 })
         except Exception:
             pass
@@ -570,7 +575,7 @@ def _validate_collector_url(parsed: ParseResult) -> None:
     # to dotted-quad form so the private-range regex can match them.
     if re.fullmatch(r"\d+", host):
         n = int(host)
-        if 0 < n <= 0xFFFFFFFF:
+        if 0 <= n <= 0xFFFFFFFF:
             host = ".".join(str((n >> s) & 0xFF) for s in (24, 16, 8, 0))
 
     if not host or _PRIVATE_HOST_RE.search(host):

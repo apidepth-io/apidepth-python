@@ -94,7 +94,7 @@ BUNDLED_BASELINE: dict = {
 _GENERIC_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), "/:uuid"),
     (re.compile(r"/\d{4,}"),        "/:id"),
-    (re.compile(r"/[a-z0-9]{24,}"), "/:token"),
+    (re.compile(r"/[a-z0-9]{24,}", re.IGNORECASE), "/:token"),
 ]
 
 # Constructs that can enable arbitrary code execution inside Python's re

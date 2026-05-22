@@ -104,9 +104,3 @@ class ApidepthConfig(AppConfig):
             VendorRegistry.vendor_count(),
         )
 
-
-# Support the string form ``"apidepth.integrations.django"`` in INSTALLED_APPS
-# (Django resolves this to ``ApidepthConfig`` via ``default_app_config``).
-# Note: deprecated in Django 3.2+ in favour of explicit AppConfig subclasses,
-# but kept for backwards compatibility with projects on older conventions.
-default_app_config = "apidepth.integrations.django.ApidepthConfig"

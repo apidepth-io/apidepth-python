@@ -330,7 +330,7 @@ class Collector:
         """
         try:
             import apidepth
-            return apidepth.get_configuration().flush_interval
+            return max(1, apidepth.get_configuration().flush_interval)
         except Exception:
             return 20
 
@@ -599,8 +599,8 @@ def _validate_api_key(key: str) -> None:
     Raises:
         ValueError: If ``\\r`` or ``\\n`` is found in *key*.
     """
-    if "\r" in key or "\n" in key:
+    if "\r" in key or "\n" in key or "\x00" in key:
         raise ValueError(
-            "Apidepth api_key contains illegal line-break characters. "
+            "Apidepth api_key contains illegal characters (line-break or NUL). "
             "This may indicate header injection — check your APIDEPTH_API_KEY value."
         )

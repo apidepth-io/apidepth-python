@@ -97,7 +97,7 @@ class Configuration:
         self.enabled: bool = True
         self.flush_interval: int = 20
         self.registry_refresh_interval: int = 6 * 60 * 60
-        self.registry_cache_path: str = "/tmp/apidepth_registry.json"
+        self.registry_cache_path: str = "/tmp/apidepth_registry.json"  # nosec B108 — public read-only registry cache, not sensitive data
         self.ignored_hosts: List[str] = []
         self.on_flush_error: Optional[Callable[[Exception, Dict], None]] = None
         self.environment: Optional[str] = None

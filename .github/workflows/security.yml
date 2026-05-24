@@ -1,0 +1,13 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security:
+    uses: apidepth-io/apidepth-tooling/.github/workflows/security-python.yml@main
+    with:
+      bandit-exclude: ".venv,venv,tests,examples"

@@ -112,7 +112,7 @@ def test_sanitize_coerces_non_string_to_str():
 
 
 def test_validate_accepts_absolute_path():
-    rl._validate_cache_path("/tmp/registry.json")  # no exception
+    rl._validate_cache_path("/tmp/registry.json")  # no exception  # nosec B108
 
 
 def test_validate_accepts_deeply_nested_absolute_path():
@@ -126,7 +126,7 @@ def test_validate_rejects_relative_path():
 
 def test_validate_rejects_dot_dot_traversal():
     with pytest.raises(ValueError):
-        rl._validate_cache_path("/tmp/../etc/passwd")
+        rl._validate_cache_path("/tmp/../etc/passwd")  # nosec B108
 
 
 def test_validate_rejects_none():
@@ -523,53 +523,65 @@ def test_start_refresh_thread_returns_started_daemon_thread():
 
 
 def test_load_and_start_uses_remote_registry(cfg, minimal_registry):
-    with patch("apidepth.registry_loader._fetch_remote", return_value=minimal_registry), \
-         patch("apidepth.registry_loader._start_refresh_thread"), \
-         patch("apidepth.collector.Collector.register_fork_safety"), \
-         patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace, \
-         patch("apidepth.get_configuration", return_value=cfg):
+    with (
+        patch("apidepth.registry_loader._fetch_remote", return_value=minimal_registry),
+        patch("apidepth.registry_loader._start_refresh_thread"),
+        patch("apidepth.collector.Collector.register_fork_safety"),
+        patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace,
+        patch("apidepth.get_configuration", return_value=cfg),
+    ):
         rl.load_and_start()
     mock_replace.assert_called_once_with(minimal_registry, cfg.extra_vendors or {})
 
 
 def test_load_and_start_falls_back_to_disk_when_remote_fails(cfg, minimal_registry):
-    with patch("apidepth.registry_loader._fetch_remote", return_value=None), \
-         patch("apidepth.registry_loader._load_from_disk", return_value=minimal_registry) as mock_disk, \
-         patch("apidepth.registry_loader._start_refresh_thread"), \
-         patch("apidepth.collector.Collector.register_fork_safety"), \
-         patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace, \
-         patch("apidepth.get_configuration", return_value=cfg):
+    with (
+        patch("apidepth.registry_loader._fetch_remote", return_value=None),
+        patch(
+            "apidepth.registry_loader._load_from_disk", return_value=minimal_registry
+        ) as mock_disk,
+        patch("apidepth.registry_loader._start_refresh_thread"),
+        patch("apidepth.collector.Collector.register_fork_safety"),
+        patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace,
+        patch("apidepth.get_configuration", return_value=cfg),
+    ):
         rl.load_and_start()
     mock_disk.assert_called_once_with(cfg)
     mock_replace.assert_called_once_with(minimal_registry, cfg.extra_vendors or {})
 
 
 def test_load_and_start_skips_replace_when_no_registry_available(cfg):
-    with patch("apidepth.registry_loader._fetch_remote", return_value=None), \
-         patch("apidepth.registry_loader._load_from_disk", return_value=None), \
-         patch("apidepth.registry_loader._start_refresh_thread"), \
-         patch("apidepth.collector.Collector.register_fork_safety"), \
-         patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace, \
-         patch("apidepth.get_configuration", return_value=cfg):
+    with (
+        patch("apidepth.registry_loader._fetch_remote", return_value=None),
+        patch("apidepth.registry_loader._load_from_disk", return_value=None),
+        patch("apidepth.registry_loader._start_refresh_thread"),
+        patch("apidepth.collector.Collector.register_fork_safety"),
+        patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace,
+        patch("apidepth.get_configuration", return_value=cfg),
+    ):
         rl.load_and_start()
     mock_replace.assert_not_called()
 
 
 def test_load_and_start_always_starts_refresh_thread(cfg):
-    with patch("apidepth.registry_loader._fetch_remote", return_value=None), \
-         patch("apidepth.registry_loader._load_from_disk", return_value=None), \
-         patch("apidepth.registry_loader._start_refresh_thread") as mock_thread, \
-         patch("apidepth.collector.Collector.register_fork_safety"), \
-         patch("apidepth.get_configuration", return_value=cfg):
+    with (
+        patch("apidepth.registry_loader._fetch_remote", return_value=None),
+        patch("apidepth.registry_loader._load_from_disk", return_value=None),
+        patch("apidepth.registry_loader._start_refresh_thread") as mock_thread,
+        patch("apidepth.collector.Collector.register_fork_safety"),
+        patch("apidepth.get_configuration", return_value=cfg),
+    ):
         rl.load_and_start()
     mock_thread.assert_called_once()
 
 
 def test_load_and_start_registers_fork_safety(cfg):
-    with patch("apidepth.registry_loader._fetch_remote", return_value=None), \
-         patch("apidepth.registry_loader._load_from_disk", return_value=None), \
-         patch("apidepth.registry_loader._start_refresh_thread"), \
-         patch("apidepth.collector.Collector.register_fork_safety") as mock_fork, \
-         patch("apidepth.get_configuration", return_value=cfg):
+    with (
+        patch("apidepth.registry_loader._fetch_remote", return_value=None),
+        patch("apidepth.registry_loader._load_from_disk", return_value=None),
+        patch("apidepth.registry_loader._start_refresh_thread"),
+        patch("apidepth.collector.Collector.register_fork_safety") as mock_fork,
+        patch("apidepth.get_configuration", return_value=cfg),
+    ):
         rl.load_and_start()
     mock_fork.assert_called_once()

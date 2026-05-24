@@ -35,7 +35,6 @@ jobs:
         run: |
           pytest \
             --cov=apidepth \
-            --cov-omit="apidepth/integrations/*" \
             --cov-fail-under=60 \
             --cov-report=term-missing \
             --cov-report=xml

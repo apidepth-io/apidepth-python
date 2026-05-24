@@ -57,6 +57,7 @@ custom metric (e.g. first-request flag set in a thread-local) and filter
 those events in your dashboard until the underlying libraries expose the
 required connection-state API.
 """
+
 from __future__ import annotations
 
 import random
@@ -87,6 +88,7 @@ def instrument() -> None:
 # requests
 # ---------------------------------------------------------------------------
 
+
 def _patch_requests() -> None:
     """Replace ``requests.adapters.HTTPAdapter.send`` with the instrumented version.
 
@@ -104,8 +106,9 @@ def _patch_requests() -> None:
 
     original = requests.adapters.HTTPAdapter.send
 
-    def _patched_send(adapter_self, request, stream=False, timeout=None,
-                      verify=True, cert=None, proxies=None):
+    def _patched_send(
+        adapter_self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
+    ):
         """Instrumented replacement for ``HTTPAdapter.send``.
 
         Early-exit conditions (evaluated cheapest-first):
@@ -116,27 +119,56 @@ def _patch_requests() -> None:
         4. Probabilistic sampling — request not selected this tick.
         """
         import apidepth
+
         config = apidepth.get_configuration()
 
         if not config.enabled:
-            return original(adapter_self, request, stream=stream, timeout=timeout,
-                            verify=verify, cert=cert, proxies=proxies)
+            return original(
+                adapter_self,
+                request,
+                stream=stream,
+                timeout=timeout,
+                verify=verify,
+                cert=cert,
+                proxies=proxies,
+            )
 
         parsed = urlparse(request.url)
         host = parsed.hostname or ""
 
         if host in config.ignored_hosts:
-            return original(adapter_self, request, stream=stream, timeout=timeout,
-                            verify=verify, cert=cert, proxies=proxies)
+            return original(
+                adapter_self,
+                request,
+                stream=stream,
+                timeout=timeout,
+                verify=verify,
+                cert=cert,
+                proxies=proxies,
+            )
 
         if not _sampled(config):
-            return original(adapter_self, request, stream=stream, timeout=timeout,
-                            verify=verify, cert=cert, proxies=proxies)
+            return original(
+                adapter_self,
+                request,
+                stream=stream,
+                timeout=timeout,
+                verify=verify,
+                cert=cert,
+                proxies=proxies,
+            )
 
         start = time.monotonic()
         try:
-            response = original(adapter_self, request, stream=stream, timeout=timeout,
-                                verify=verify, cert=cert, proxies=proxies)
+            response = original(
+                adapter_self,
+                request,
+                stream=stream,
+                timeout=timeout,
+                verify=verify,
+                cert=cert,
+                proxies=proxies,
+            )
             duration_ms = _elapsed_ms(start)
             _record_success(
                 method=request.method.upper(),
@@ -167,6 +199,7 @@ def _patch_requests() -> None:
 # httpx
 # ---------------------------------------------------------------------------
 
+
 def _patch_httpx() -> None:
     """Replace ``httpx.Client.send`` and ``httpx.AsyncClient.send``.
 
@@ -188,6 +221,7 @@ def _patch_httpx() -> None:
     def _patched_sync_send(client_self, request, **kwargs):
         """Instrumented replacement for ``httpx.Client.send`` (sync)."""
         import apidepth
+
         config = apidepth.get_configuration()
         host = str(request.url.host)
 
@@ -222,6 +256,7 @@ def _patch_httpx() -> None:
     async def _patched_async_send(client_self, request, **kwargs):
         """Instrumented replacement for ``httpx.AsyncClient.send`` (async)."""
         import apidepth
+
         config = apidepth.get_configuration()
         host = str(request.url.host)
 
@@ -262,6 +297,7 @@ def _patch_httpx() -> None:
 # Shared recording helpers
 # ---------------------------------------------------------------------------
 
+
 def _record_success(
     *,
     method: str,
@@ -290,6 +326,7 @@ def _record_success(
     """
     try:
         from apidepth.vendor_registry import VendorRegistry
+
         result = VendorRegistry.identify(host, path)
         if result is None:
             return
@@ -299,24 +336,30 @@ def _record_success(
         now_ms = _now_ms()
 
         from apidepth.rate_limit_headers import extract as extract_rl
+
         rl = extract_rl(headers, now_ms)
 
         from apidepth import collector, event
-        collector.Collector.instance().record(event.build({
-            "vendor": vendor,
-            "endpoint": endpoint,
-            "method": method,
-            "status": status,
-            "outcome": outcome,
-            "duration_ms": duration_ms,
-            # Always False — neither requests nor httpx exposes a public API to
-            # detect keep-alive connection reuse (Ruby uses Net::HTTP#started?).
-            # See the module docstring for impact details.
-            "cold_start": False,
-            "env": _resolve_env(),
-            "ts": now_ms,
-            **(rl or {}),
-        }))
+
+        collector.Collector.instance().record(
+            event.build(
+                {
+                    "vendor": vendor,
+                    "endpoint": endpoint,
+                    "method": method,
+                    "status": status,
+                    "outcome": outcome,
+                    "duration_ms": duration_ms,
+                    # Always False — neither requests nor httpx exposes a public API to
+                    # detect keep-alive connection reuse (Ruby uses Net::HTTP#started?).
+                    # See the module docstring for impact details.
+                    "cold_start": False,
+                    "env": _resolve_env(),
+                    "ts": now_ms,
+                    **(rl or {}),
+                }
+            )
+        )
     except Exception:
         pass
 
@@ -350,37 +393,48 @@ def _record_timeout_if_applicable(
     try:
         if is_requests_timeout:
             import requests.exceptions
-            if not isinstance(exc, (
-                requests.exceptions.Timeout,
-                requests.exceptions.ConnectTimeout,
-                requests.exceptions.ReadTimeout,
-            )):
+
+            if not isinstance(
+                exc,
+                (
+                    requests.exceptions.Timeout,
+                    requests.exceptions.ConnectTimeout,
+                    requests.exceptions.ReadTimeout,
+                ),
+            ):
                 return
         else:
             import httpx
+
             if not isinstance(exc, httpx.TimeoutException):
                 return
 
         from apidepth.vendor_registry import VendorRegistry
+
         result = VendorRegistry.identify(host, path)
         if result is None:
             return
         vendor, endpoint = result
 
         from apidepth import collector, event
-        collector.Collector.instance().record(event.build({
-            "vendor": vendor,
-            "endpoint": endpoint,
-            "method": method,
-            "status": None,
-            "outcome": "timeout",
-            "error_class": type(exc).__name__,
-            "duration_ms": duration_ms,
-            # Always False — see module docstring for the cold_start limitation.
-            "cold_start": False,
-            "env": _resolve_env(),
-            "ts": _now_ms(),
-        }))
+
+        collector.Collector.instance().record(
+            event.build(
+                {
+                    "vendor": vendor,
+                    "endpoint": endpoint,
+                    "method": method,
+                    "status": None,
+                    "outcome": "timeout",
+                    "error_class": type(exc).__name__,
+                    "duration_ms": duration_ms,
+                    # Always False — see module docstring for the cold_start limitation.
+                    "cold_start": False,
+                    "env": _resolve_env(),
+                    "ts": _now_ms(),
+                }
+            )
+        )
     except Exception:
         pass
 
@@ -388,6 +442,7 @@ def _record_timeout_if_applicable(
 # ---------------------------------------------------------------------------
 # Shared utility helpers
 # ---------------------------------------------------------------------------
+
 
 def _elapsed_ms(start: float) -> int:
     """Return milliseconds elapsed since *start* (a ``time.monotonic()`` value)."""
@@ -437,6 +492,7 @@ def _resolve_env() -> str:
     """Return the configured deployment environment tag, defaulting to ``"unknown"``."""
     try:
         import apidepth
+
         return apidepth.get_configuration().environment or "unknown"
     except Exception:
         return "unknown"

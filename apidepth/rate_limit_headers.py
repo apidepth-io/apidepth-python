@@ -39,6 +39,7 @@ Reset
   3. ``ratelimit-reset``                 (IETF draft)
   4. ``retry-after``                     (Stripe / generic 429 fallback)
 """
+
 from __future__ import annotations
 
 import re
@@ -116,6 +117,7 @@ def extract(headers: Mapping[str, str], now_ms: int) -> Optional[Dict[str, int]]
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _find_integer(headers: Mapping[str, str], names: List[str]) -> Optional[int]:
     """Return the first non-negative integer found across *names* in *headers*.

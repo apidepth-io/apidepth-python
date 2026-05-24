@@ -1,4 +1,5 @@
 """Tests for Collector: record, stats, singleton lifecycle, validators."""
+
 import logging
 from unittest.mock import patch
 from urllib.parse import urlparse
@@ -27,6 +28,7 @@ def reset_collector_and_config():
 # ---------------------------------------------------------------------------
 # record / stats
 # ---------------------------------------------------------------------------
+
 
 def test_record_enqueues_event_and_stats_shows_queue_size_1():
     col = Collector.instance()
@@ -64,6 +66,7 @@ def test_stats_initial_state():
 # ---------------------------------------------------------------------------
 # Singleton lifecycle
 # ---------------------------------------------------------------------------
+
 
 def test_instance_returns_same_object_on_repeated_calls():
     a = Collector.instance()
@@ -106,6 +109,7 @@ def test_atexit_handler_unregistered_on_reset():
 # _validate_api_key
 # ---------------------------------------------------------------------------
 
+
 def test_validate_api_key_raises_on_carriage_return():
     with pytest.raises(ValueError, match="illegal"):
         _validate_api_key("apd_live_\r_bad")
@@ -134,6 +138,7 @@ def test_validate_api_key_does_not_raise_on_empty_string():
 # ---------------------------------------------------------------------------
 # _validate_collector_url
 # ---------------------------------------------------------------------------
+
 
 def test_validate_collector_url_raises_for_http():
     with pytest.raises(ValueError, match="HTTPS"):
@@ -184,6 +189,7 @@ def test_validate_collector_url_allows_another_public_hostname():
 # ---------------------------------------------------------------------------
 # flush with no api_key
 # ---------------------------------------------------------------------------
+
 
 def test_flush_with_no_api_key_logs_warning_and_does_not_send():
     apidepth.configure(api_key=None)

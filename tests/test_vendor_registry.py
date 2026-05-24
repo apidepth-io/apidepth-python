@@ -1,4 +1,5 @@
 """Tests for VendorRegistry.identify() and load_extra_vendors()."""
+
 import pytest
 
 from apidepth.vendor_registry import VendorRegistry, BUNDLED_BASELINE
@@ -8,6 +9,7 @@ from apidepth.vendor_registry import VendorRegistry, BUNDLED_BASELINE
 def restore_registry():
     """Restore bundled baseline registry state between tests."""
     from apidepth.vendor_registry import _build_hosts, _build_patterns
+
     original_hosts = _build_hosts(BUNDLED_BASELINE)
     original_patterns = _build_patterns(BUNDLED_BASELINE)
     original_version = BUNDLED_BASELINE["version"]
@@ -21,6 +23,7 @@ def restore_registry():
 # ---------------------------------------------------------------------------
 # identify() — known vendors
 # ---------------------------------------------------------------------------
+
 
 def test_identify_stripe_charge():
     result = VendorRegistry.identify("api.stripe.com", "/v1/charges/ch_abc123")
@@ -66,6 +69,7 @@ def test_identify_github_repo():
 # identify() — unknown host
 # ---------------------------------------------------------------------------
 
+
 def test_identify_unknown_host_returns_none():
     result = VendorRegistry.identify("unknown.example.com", "/anything")
     assert result is None
@@ -80,8 +84,11 @@ def test_identify_empty_host_returns_none():
 # Generic normalisation (applied after vendor patterns)
 # ---------------------------------------------------------------------------
 
+
 def test_generic_uuid_normalisation():
-    result = VendorRegistry.identify("api.stripe.com", "/v1/objects/550e8400-e29b-41d4-a716-446655440000")
+    result = VendorRegistry.identify(
+        "api.stripe.com", "/v1/objects/550e8400-e29b-41d4-a716-446655440000"
+    )
     assert result is not None
     _, endpoint = result
     assert "/:uuid" in endpoint
@@ -121,6 +128,7 @@ def test_query_string_stripped_before_normalisation():
 # load_extra_vendors()
 # ---------------------------------------------------------------------------
 
+
 def test_load_extra_vendors_makes_identify_work():
     VendorRegistry.load_extra_vendors({"my-api": "api.example.com"})
     result = VendorRegistry.identify("api.example.com", "/anything")
@@ -130,10 +138,12 @@ def test_load_extra_vendors_makes_identify_work():
 
 
 def test_load_extra_vendors_multiple_entries():
-    VendorRegistry.load_extra_vendors({
-        "payments": "pay.acme.com",
-        "notifications": "notify.acme.com",
-    })
+    VendorRegistry.load_extra_vendors(
+        {
+            "payments": "pay.acme.com",
+            "notifications": "notify.acme.com",
+        }
+    )
     assert VendorRegistry.identify("pay.acme.com", "/") is not None
     assert VendorRegistry.identify("notify.acme.com", "/") is not None
 

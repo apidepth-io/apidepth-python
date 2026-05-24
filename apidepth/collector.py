@@ -34,6 +34,7 @@ Call :meth:`Collector.reset` inside ``os.register_at_fork`` or a framework
 equivalent (e.g. ``on_worker_boot`` in Puma-style servers) to give each
 worker process its own flush thread.
 """
+
 from __future__ import annotations
 
 import atexit
@@ -161,6 +162,7 @@ class Collector:
                 return
             try:
                 import os
+
                 os.register_at_fork(after_in_child=cls.reset)
                 cls._fork_safety_registered = True
                 _logger.debug("[Apidepth] Fork safety registered via os.register_at_fork")
@@ -168,10 +170,9 @@ class Collector:
                 # os.register_at_fork is POSIX-only; not available on Windows.
                 cls._fork_safety_registered = True  # mark done so we only warn once
                 import sys
+
                 mods = sys.modules
-                forking_server = next(
-                    (s for s in ("gunicorn", "uwsgi") if s in mods), None
-                )
+                forking_server = next((s for s in ("gunicorn", "uwsgi") if s in mods), None)
                 if forking_server:
                     _logger.warning(
                         "[Apidepth] %s detected but os.register_at_fork is unavailable "
@@ -330,6 +331,7 @@ class Collector:
         """
         try:
             import apidepth
+
             return max(1, apidepth.get_configuration().flush_interval)
         except Exception:
             return 20
@@ -364,7 +366,9 @@ class Collector:
                     "[Apidepth] Flush has failed %d times consecutively. "
                     "Events are being dropped. Check your API key and network connectivity. "
                     "Last error: %s: %s",
-                    failures, type(exc).__name__, exc,
+                    failures,
+                    type(exc).__name__,
+                    exc,
                 )
 
     def _drain_queue(self) -> List[Dict[str, Any]]:
@@ -380,7 +384,9 @@ class Collector:
                 break
         return events
 
-    def _invoke_error_callback(self, exc: Exception, dropped: int, failures: int, total_dropped: int) -> None:
+    def _invoke_error_callback(
+        self, exc: Exception, dropped: int, failures: int, total_dropped: int
+    ) -> None:
         """Call ``Configuration.on_flush_error`` if one is configured.
 
         All exceptions raised inside the callback are swallowed — the
@@ -394,13 +400,17 @@ class Collector:
         """
         try:
             import apidepth
+
             cb = apidepth.get_configuration().on_flush_error
             if cb is not None:
-                cb(exc, {
-                    "dropped_events": dropped,
-                    "consecutive_failures": failures,
-                    "total_dropped": total_dropped,
-                })
+                cb(
+                    exc,
+                    {
+                        "dropped_events": dropped,
+                        "consecutive_failures": failures,
+                        "total_dropped": total_dropped,
+                    },
+                )
         except Exception:
             pass
 
@@ -426,6 +436,7 @@ class Collector:
             attempt always starts with a fresh socket.
         """
         import apidepth
+
         config = apidepth.get_configuration()
         key = config.api_key or ""
 
@@ -537,6 +548,7 @@ class Collector:
 # ---------------------------------------------------------------------------
 # Module-private validators
 # ---------------------------------------------------------------------------
+
 
 def _validate_collector_url(parsed: ParseResult) -> None:
     """Raise ``ValueError`` if *parsed* is not a safe HTTPS collector URL.

@@ -28,6 +28,7 @@ The ``ApidepthConfig.ready()`` method runs after all other ``AppConfig``
 
 This mirrors the sequencing guarantees of the Ruby gem's Railtie.
 """
+
 from __future__ import annotations
 
 import logging
@@ -72,6 +73,7 @@ class ApidepthConfig(AppConfig):
         # degrades gracefully rather than preventing the app from starting.
         try:
             from django.conf import settings as django_settings
+
             apidepth_settings = getattr(django_settings, "APIDEPTH", {})
             for key, value in apidepth_settings.items():
                 setattr(config, key, value)
@@ -103,4 +105,3 @@ class ApidepthConfig(AppConfig):
             VendorRegistry.version(),
             VendorRegistry.vendor_count(),
         )
-

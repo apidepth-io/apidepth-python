@@ -1,0 +1,11 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    uses: cmwright33/apidepth-tooling/.github/workflows/lint-python.yml@main

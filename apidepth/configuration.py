@@ -6,6 +6,7 @@ by ``apidepth.configure(**kwargs)``.  Framework integrations (Django, Flask)
 read their own config sources and write into the same singleton during
 ``AppConfig.ready()`` / ``Apidepth.init_app()``.
 """
+
 from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional
@@ -74,12 +75,21 @@ class Configuration:
 
     #: Canonical set of valid configuration keys. Used by configure() to
     #: validate kwargs without creating a throwaway instance.
-    VALID_KEYS: frozenset = frozenset({
-        "api_key", "collector_url", "enabled", "flush_interval",
-        "registry_refresh_interval", "registry_cache_path",
-        "ignored_hosts", "on_flush_error", "environment",
-        "sample_rate", "extra_vendors",
-    })
+    VALID_KEYS: frozenset = frozenset(
+        {
+            "api_key",
+            "collector_url",
+            "enabled",
+            "flush_interval",
+            "registry_refresh_interval",
+            "registry_cache_path",
+            "ignored_hosts",
+            "on_flush_error",
+            "environment",
+            "sample_rate",
+            "extra_vendors",
+        }
+    )
 
     def __init__(self) -> None:
         self.api_key: Optional[str] = None

@@ -12,6 +12,7 @@ the test body (after the ``@responses_mock.activate`` decorator has already
 activated its mock).  Tests that do not need responses activate instrumentation
 in the normal way.
 """
+
 import httpx
 import pytest
 import requests
@@ -54,6 +55,7 @@ def reset_state():
 # Idempotency
 # ---------------------------------------------------------------------------
 
+
 def test_instrument_is_idempotent():
     apidepth.configure(api_key="apd_live_test", environment="test")
     instrumentation.instrument()
@@ -75,6 +77,7 @@ def test_requests_patched_flag_set_only_once():
 # requests: successful recording
 # Instrument INSIDE the responses context so our patch sits on top.
 # ---------------------------------------------------------------------------
+
 
 @responses_mock.activate
 def test_requests_get_to_stripe_records_one_event():
@@ -112,6 +115,7 @@ def test_requests_get_to_unknown_host_records_nothing():
 # ---------------------------------------------------------------------------
 # requests: config gates
 # ---------------------------------------------------------------------------
+
 
 @responses_mock.activate
 def test_requests_disabled_config_records_nothing():
@@ -159,6 +163,7 @@ def test_requests_ignored_host_records_nothing():
 # requests: timeout recording
 # ---------------------------------------------------------------------------
 
+
 def test_requests_timeout_records_timeout_event():
     import requests.exceptions
 
@@ -188,6 +193,7 @@ def test_requests_timeout_records_timeout_event():
 # so our instrumentation (patching Client.send) sits above it correctly.
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 def test_httpx_get_to_stripe_records_one_event():
     apidepth.configure(api_key="apd_live_test", environment="test")
@@ -202,6 +208,7 @@ def test_httpx_get_to_stripe_records_one_event():
 # ---------------------------------------------------------------------------
 # httpx: timeout recording
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 def test_httpx_timeout_records_timeout_event():
@@ -222,6 +229,7 @@ def test_httpx_timeout_records_timeout_event():
 # ---------------------------------------------------------------------------
 # Recorded event field validation
 # ---------------------------------------------------------------------------
+
 
 @responses_mock.activate
 def test_recorded_event_has_correct_fields():

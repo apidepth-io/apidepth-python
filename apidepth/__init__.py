@@ -30,6 +30,7 @@ Module-level globals
     standard ``"apidepth"`` logger.  Override with :func:`set_logger` to
     route SDK log output through a framework logger (Django, Flask).
 """
+
 from __future__ import annotations
 
 import logging
@@ -50,6 +51,7 @@ _logger: Optional[logging.Logger] = None
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def configure(**kwargs: Any) -> Configuration:
     """Set one or more configuration options and return the singleton.
@@ -76,6 +78,7 @@ def configure(**kwargs: Any) -> Configuration:
         TypeError: If an unknown configuration key is passed.
     """
     from apidepth.configuration import Configuration as _Cfg
+
     unknown = set(kwargs) - _Cfg.VALID_KEYS
     if unknown:
         raise TypeError(
@@ -143,6 +146,7 @@ def instrument() -> None:
     enqueued for the next batch flush.
     """
     from apidepth.instrumentation import instrument as _instrument
+
     _instrument()
 
 

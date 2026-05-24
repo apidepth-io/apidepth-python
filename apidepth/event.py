@@ -12,15 +12,14 @@ WHY return a plain dict rather than a dataclass?
 ``.to_dict()`` before serialisation, adding a conversion step on every
 batch.  The dict gives us serialisation transparency without extra overhead.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict
 
 #: Fields that must be present on every event regardless of outcome.
 #: ``error_class`` and rate-limit fields (``rl_*``) are optional.
-REQUIRED: frozenset = frozenset(
-    {"vendor", "endpoint", "method", "outcome", "duration_ms", "ts"}
-)
+REQUIRED: frozenset = frozenset({"vendor", "endpoint", "method", "outcome", "duration_ms", "ts"})
 
 
 def build(attrs: Dict[str, Any]) -> Dict[str, Any]:

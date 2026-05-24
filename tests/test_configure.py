@@ -1,4 +1,5 @@
 """Tests for apidepth.configure(), get_configuration(), and sanitize_log()."""
+
 import pytest
 import apidepth
 from apidepth.configuration import Configuration

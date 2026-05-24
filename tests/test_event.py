@@ -1,4 +1,5 @@
 """Tests for apidepth.event.build()."""
+
 import time
 
 import pytest
@@ -9,6 +10,7 @@ from apidepth.event import build, REQUIRED
 # ---------------------------------------------------------------------------
 # build() with all fields present
 # ---------------------------------------------------------------------------
+
 
 def _valid_attrs(**overrides):
     base = {
@@ -60,6 +62,7 @@ def test_build_includes_ts_as_integer():
 # Optional fields are passed through
 # ---------------------------------------------------------------------------
 
+
 def test_build_passes_through_optional_status():
     result = build(_valid_attrs(status=429))
     assert result["status"] == 429
@@ -100,6 +103,7 @@ def test_build_passes_through_env():
 # ---------------------------------------------------------------------------
 # Missing required fields raise ValueError
 # ---------------------------------------------------------------------------
+
 
 def test_build_raises_for_missing_vendor():
     attrs = _valid_attrs()
@@ -154,6 +158,7 @@ def test_build_error_message_names_all_missing_fields():
 # ---------------------------------------------------------------------------
 # Mutation independence
 # ---------------------------------------------------------------------------
+
 
 def test_build_mutation_of_result_does_not_affect_original():
     attrs = _valid_attrs()

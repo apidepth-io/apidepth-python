@@ -1,4 +1,5 @@
 """Tests for rate_limit_headers.extract() and _parse_duration_ms()."""
+
 from apidepth.rate_limit_headers import extract, _parse_duration_ms
 
 NOW_MS = 1_000_000_000_000  # fixed epoch ms for deterministic assertions
@@ -7,6 +8,7 @@ NOW_MS = 1_000_000_000_000  # fixed epoch ms for deterministic assertions
 # ---------------------------------------------------------------------------
 # OpenAI / Anthropic header family
 # ---------------------------------------------------------------------------
+
 
 def test_openai_headers_duration_string_1m30s():
     headers = {
@@ -56,6 +58,7 @@ def test_openai_headers_reset_duration_2h():
 # GitHub header family
 # ---------------------------------------------------------------------------
 
+
 def test_github_headers_unix_timestamp():
     future_unix_ts = NOW_MS // 1000 + 60  # 60 seconds in the future
     headers = {
@@ -81,6 +84,7 @@ def test_github_unix_timestamp_greater_than_now_treated_as_absolute():
 # IETF draft header family
 # ---------------------------------------------------------------------------
 
+
 def test_ietf_headers_seconds_from_now():
     headers = {
         "ratelimit-remaining": "99",
@@ -99,6 +103,7 @@ def test_ietf_headers_seconds_from_now():
 # Stripe retry-after
 # ---------------------------------------------------------------------------
 
+
 def test_stripe_retry_after_integer_seconds():
     headers = {"retry-after": "60"}
     result = extract(headers, NOW_MS)
@@ -116,6 +121,7 @@ def test_stripe_retry_after_zero_seconds():
 # ---------------------------------------------------------------------------
 # No headers / partial headers
 # ---------------------------------------------------------------------------
+
 
 def test_no_rate_limit_headers_returns_none():
     headers = {"content-type": "application/json", "x-request-id": "abc123"}
@@ -152,6 +158,7 @@ def test_partial_headers_only_reset():
 # ---------------------------------------------------------------------------
 # _parse_duration_ms
 # ---------------------------------------------------------------------------
+
 
 def test_parse_duration_ms_1m30s():
     assert _parse_duration_ms("1m30s") == 90_000

@@ -50,6 +50,7 @@ changes between registry fetches produces a fresh warning.
 This module mirrors the behaviour of the Ruby gem's ``RegistryLoader`` class
 added in commits ``f2882dd`` and ``2161fd0``.
 """
+
 from __future__ import annotations
 
 import http.client
@@ -100,6 +101,7 @@ _warned_conflict: Dict[str, bool] = {}
 # Public entry points
 # ---------------------------------------------------------------------------
 
+
 def load_and_start() -> None:
     """Bootstrap the registry and start the background refresh thread.
 
@@ -133,6 +135,7 @@ def load_and_start() -> None:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 def _start_refresh_thread() -> threading.Thread:
     """Spawn the background registry-refresh daemon thread.
 
@@ -144,14 +147,17 @@ def _start_refresh_thread() -> threading.Thread:
         The started :class:`threading.Thread` (daemon, name
         ``"apidepth-registry"``).
     """
+
     def _loop() -> None:
         while True:
             import apidepth
+
             cfg = apidepth.get_configuration()
             time.sleep(cfg.registry_refresh_interval)
             registry = _fetch_remote(cfg)
             if registry:
                 from apidepth.vendor_registry import VendorRegistry
+
                 VendorRegistry.replace(registry, cfg.extra_vendors or {})
 
     t = threading.Thread(target=_loop, name="apidepth-registry", daemon=True)
@@ -192,18 +198,27 @@ def _fetch_remote(config: Any) -> Optional[Dict[str, Any]]:
     try:
         parsed = urlparse(REGISTRY_URL)
         ctx = ssl.create_default_context()
-        conn = http.client.HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=5, context=ctx)
-        conn.request("GET", parsed.path, headers={"Authorization": f"Bearer {config.api_key or ''}"})
+        conn = http.client.HTTPSConnection(
+            parsed.hostname, parsed.port or 443, timeout=5, context=ctx
+        )
+        conn.request(
+            "GET", parsed.path, headers={"Authorization": f"Bearer {config.api_key or ''}"}
+        )
         resp = conn.getresponse()
         if resp.status != 200:
-            _logger.debug("[Apidepth] Registry fetch returned HTTP %d — using cached/bundled baseline", resp.status)
+            _logger.debug(
+                "[Apidepth] Registry fetch returned HTTP %d — using cached/bundled baseline",
+                resp.status,
+            )
             return None
 
         # Read one byte beyond the limit so we can detect over-sized responses
         # without fully buffering them.
         body = resp.read(MAX_RESPONSE_BYTES + 1)
         if len(body) > MAX_RESPONSE_BYTES:
-            _logger.warning("[Apidepth] Registry response too large (%d bytes) — skipping", len(body))
+            _logger.warning(
+                "[Apidepth] Registry response too large (%d bytes) — skipping", len(body)
+            )
             return None
 
         registry = json.loads(body)
@@ -216,7 +231,9 @@ def _fetch_remote(config: Any) -> Optional[Dict[str, Any]]:
         _write_cache(config, body)
         return registry
     except Exception as exc:
-        _logger.debug("[Apidepth] Registry fetch failed: %s: %s", type(exc).__name__, _sanitize(str(exc)))
+        _logger.debug(
+            "[Apidepth] Registry fetch failed: %s: %s", type(exc).__name__, _sanitize(str(exc))
+        )
         return None
     finally:
         try:
@@ -274,6 +291,7 @@ def _apply_customer_vendors(registry: Dict[str, Any], config: Any) -> None:
                 _conflict_vendors[name] = {"local": local_host, "remote": remote_host}
 
     from apidepth.vendor_registry import VendorRegistry
+
     VendorRegistry.load_extra_vendors(clean)
 
 
@@ -353,11 +371,7 @@ def _emit_conflict_warnings() -> None:
     with _lock:
         pending = dict(_conflict_vendors)
         _conflict_vendors.clear()
-        to_warn = {
-            name: hosts
-            for name, hosts in pending.items()
-            if not _warned_conflict.get(name)
-        }
+        to_warn = {name: hosts for name, hosts in pending.items() if not _warned_conflict.get(name)}
         for name in to_warn:
             _warned_conflict[name] = True
 
@@ -367,7 +381,9 @@ def _emit_conflict_warnings() -> None:
             "'%s' locally but the registry has '%s' "
             "— registry takes precedence. Update your initializer or remove "
             "the entry from your dashboard at www.apidepth.io.",
-            name, hosts["local"], hosts["remote"],
+            name,
+            hosts["local"],
+            hosts["remote"],
         )
 
 
@@ -438,7 +454,9 @@ def _validate_cache_path(path: str) -> None:
     if not isinstance(path, str) or not path.startswith("/"):
         raise ValueError(f"registry_cache_path must be an absolute path (got {path!r})")
     if ".." in path.split("/"):
-        raise ValueError(f"registry_cache_path must not contain '..' traversal segments (got {path!r})")
+        raise ValueError(
+            f"registry_cache_path must not contain '..' traversal segments (got {path!r})"
+        )
 
 
 def _sanitize(s: str) -> str:

@@ -36,6 +36,7 @@ Key                        Type     Notes
 ``APIDEPTH_COLLECTOR_URL`` str      Override the production endpoint.
 =========================  =======  =========================================
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,13 +54,13 @@ class Apidepth:
     # Mapping from Flask config keys to Configuration attribute names.
     # Defined at class level to avoid rebuilding the dict on every init_app call.
     _CONFIG_KEY_MAP = {
-        "APIDEPTH_API_KEY":         "api_key",
-        "APIDEPTH_COLLECTOR_URL":   "collector_url",
-        "APIDEPTH_ENVIRONMENT":     "environment",
-        "APIDEPTH_SAMPLE_RATE":     "sample_rate",
-        "APIDEPTH_FLUSH_INTERVAL":  "flush_interval",
-        "APIDEPTH_IGNORED_HOSTS":   "ignored_hosts",
-        "APIDEPTH_EXTRA_VENDORS":   "extra_vendors",
+        "APIDEPTH_API_KEY": "api_key",
+        "APIDEPTH_COLLECTOR_URL": "collector_url",
+        "APIDEPTH_ENVIRONMENT": "environment",
+        "APIDEPTH_SAMPLE_RATE": "sample_rate",
+        "APIDEPTH_FLUSH_INTERVAL": "flush_interval",
+        "APIDEPTH_IGNORED_HOSTS": "ignored_hosts",
+        "APIDEPTH_EXTRA_VENDORS": "extra_vendors",
     }
 
     def __init__(self, app: Any = None) -> None:

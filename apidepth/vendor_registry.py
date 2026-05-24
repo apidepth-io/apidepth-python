@@ -18,6 +18,7 @@ Path normalisation happens in two stages:
 Query strings are stripped before either stage so ``?page=2`` never leaks
 into normalised endpoints.
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,51 +37,66 @@ BUNDLED_BASELINE: dict = {
         "stripe": {
             "hosts": ["api.stripe.com"],
             "patterns": [
-                {"match": r"/v1/charges/ch_\w+",           "replace": "/v1/charges/:id"},
-                {"match": r"/v1/customers/cus_\w+",        "replace": "/v1/customers/:id"},
-                {"match": r"/v1/payment_intents/pi_\w+",   "replace": "/v1/payment_intents/:id"},
-                {"match": r"/v1/subscriptions/sub_\w+",    "replace": "/v1/subscriptions/:id"},
-                {"match": r"/v1/invoices/in_\w+",          "replace": "/v1/invoices/:id"},
-                {"match": r"/v1/refunds/re_\w+",           "replace": "/v1/refunds/:id"},
+                {"match": r"/v1/charges/ch_\w+", "replace": "/v1/charges/:id"},
+                {"match": r"/v1/customers/cus_\w+", "replace": "/v1/customers/:id"},
+                {"match": r"/v1/payment_intents/pi_\w+", "replace": "/v1/payment_intents/:id"},
+                {"match": r"/v1/subscriptions/sub_\w+", "replace": "/v1/subscriptions/:id"},
+                {"match": r"/v1/invoices/in_\w+", "replace": "/v1/invoices/:id"},
+                {"match": r"/v1/refunds/re_\w+", "replace": "/v1/refunds/:id"},
             ],
         },
         "openai": {
             "hosts": ["api.openai.com"],
             "patterns": [
-                {"match": r"/v1/chat/completions",         "replace": "/v1/chat/completions"},
-                {"match": r"/v1/embeddings",               "replace": "/v1/embeddings"},
-                {"match": r"/v1/images/generations",       "replace": "/v1/images/generations"},
-                {"match": r"/v1/files/file-\w+",           "replace": "/v1/files/:id"},
+                {"match": r"/v1/chat/completions", "replace": "/v1/chat/completions"},
+                {"match": r"/v1/embeddings", "replace": "/v1/embeddings"},
+                {"match": r"/v1/images/generations", "replace": "/v1/images/generations"},
+                {"match": r"/v1/files/file-\w+", "replace": "/v1/files/:id"},
             ],
         },
         "anthropic": {
             "hosts": ["api.anthropic.com"],
             "patterns": [
-                {"match": r"/v1/messages",                 "replace": "/v1/messages"},
+                {"match": r"/v1/messages", "replace": "/v1/messages"},
             ],
         },
         "twilio": {
             "hosts": ["api.twilio.com"],
             "patterns": [
-                {"match": r"/2010-04-01/Accounts/AC\w+/Messages/SM\w+", "replace": "/Accounts/:id/Messages/:id"},
-                {"match": r"/2010-04-01/Accounts/AC\w+/Messages",       "replace": "/Accounts/:id/Messages"},
-                {"match": r"/2010-04-01/Accounts/AC\w+/Calls/CA\w+",    "replace": "/Accounts/:id/Calls/:id"},
-                {"match": r"/2010-04-01/Accounts/AC\w+/Calls",          "replace": "/Accounts/:id/Calls"},
+                {
+                    "match": r"/2010-04-01/Accounts/AC\w+/Messages/SM\w+",
+                    "replace": "/Accounts/:id/Messages/:id",
+                },
+                {
+                    "match": r"/2010-04-01/Accounts/AC\w+/Messages",
+                    "replace": "/Accounts/:id/Messages",
+                },
+                {
+                    "match": r"/2010-04-01/Accounts/AC\w+/Calls/CA\w+",
+                    "replace": "/Accounts/:id/Calls/:id",
+                },
+                {"match": r"/2010-04-01/Accounts/AC\w+/Calls", "replace": "/Accounts/:id/Calls"},
             ],
         },
         "resend": {
             "hosts": ["api.resend.com"],
             "patterns": [
-                {"match": r"/emails/[0-9a-f-]{36}",        "replace": "/emails/:id"},
+                {"match": r"/emails/[0-9a-f-]{36}", "replace": "/emails/:id"},
             ],
         },
         "github": {
             "hosts": ["api.github.com"],
             "patterns": [
-                {"match": r"/repos/[^/]+/[^/]+/pulls/\d+",  "replace": "/repos/:owner/:repo/pulls/:number"},
-                {"match": r"/repos/[^/]+/[^/]+/issues/\d+", "replace": "/repos/:owner/:repo/issues/:number"},
-                {"match": r"/repos/[^/]+/[^/]+",            "replace": "/repos/:owner/:repo"},
-                {"match": r"/users/[^/]+",                  "replace": "/users/:username"},
+                {
+                    "match": r"/repos/[^/]+/[^/]+/pulls/\d+",
+                    "replace": "/repos/:owner/:repo/pulls/:number",
+                },
+                {
+                    "match": r"/repos/[^/]+/[^/]+/issues/\d+",
+                    "replace": "/repos/:owner/:repo/issues/:number",
+                },
+                {"match": r"/repos/[^/]+/[^/]+", "replace": "/repos/:owner/:repo"},
+                {"match": r"/users/[^/]+", "replace": "/users/:username"},
             ],
         },
     },
@@ -93,7 +109,7 @@ BUNDLED_BASELINE: dict = {
 #: pattern (matches — replaced with ``/:token``).
 _GENERIC_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), "/:uuid"),
-    (re.compile(r"/\d{4,}"),        "/:id"),
+    (re.compile(r"/\d{4,}"), "/:id"),
     (re.compile(r"/[a-z0-9]{24,}", re.IGNORECASE), "/:token"),
 ]
 
@@ -125,7 +141,7 @@ class VendorRegistry:
     """
 
     _lock = threading.Lock()
-    _hosts: Dict[str, str] = {}                             # host → vendor slug
+    _hosts: Dict[str, str] = {}  # host → vendor slug
     _patterns: Dict[str, List[Tuple[re.Pattern, str]]] = {}  # slug → [(pattern, replacement)]
     _version: str = "bundled"
 
@@ -234,6 +250,7 @@ class VendorRegistry:
 # Module-private helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_hosts(registry: dict) -> Dict[str, str]:
     """Build a ``{hostname: vendor_slug}`` map from a registry document."""
     hosts: Dict[str, str] = {}
@@ -262,7 +279,8 @@ def _build_patterns(registry: dict) -> Dict[str, List[Tuple[re.Pattern, str]]]:
             if _UNSAFE_PATTERN.search(match_str):
                 _logger.warning(
                     "[Apidepth] Skipping unsafe pattern for %s: %r",
-                    _sanitize(slug), match_str,
+                    _sanitize(slug),
+                    match_str,
                 )
                 continue
             try:
@@ -270,7 +288,9 @@ def _build_patterns(registry: dict) -> Dict[str, List[Tuple[re.Pattern, str]]]:
             except re.error as exc:
                 _logger.warning(
                     "[Apidepth] Skipping invalid pattern for %s %r: %s",
-                    _sanitize(slug), match_str, exc,
+                    _sanitize(slug),
+                    match_str,
+                    exc,
                 )
         patterns[slug] = vendor_patterns
     return patterns

@@ -8,7 +8,33 @@ on:
 
 jobs:
   coverage:
-    uses: apidepth-io/apidepth-tooling/.github/workflows/coverage-python.yml@main
-    with:
-      source: "apidepth"
-      install-extras: "dev"
+    name: pytest coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout collector (SSRF fixture)
+        uses: actions/checkout@v4
+        with:
+          repository: apidepth-io/apidepth-collector
+          token: ${{ secrets.GH_PAT }}
+          path: apidepth-collector
+          sparse-checkout: tests/fixtures
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          pytest \
+            --cov=apidepth \
+            --cov-fail-under=80 \
+            --cov-report=term-missing \
+            --cov-report=xml

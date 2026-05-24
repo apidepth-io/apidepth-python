@@ -196,6 +196,7 @@ def _fetch_remote(config: Any) -> Optional[Dict[str, Any]]:
         conn.request("GET", parsed.path, headers={"Authorization": f"Bearer {config.api_key or ''}"})
         resp = conn.getresponse()
         if resp.status != 200:
+            _logger.debug("[Apidepth] Registry fetch returned HTTP %d — using cached/bundled baseline", resp.status)
             return None
 
         # Read one byte beyond the limit so we can detect over-sized responses
@@ -214,7 +215,8 @@ def _fetch_remote(config: Any) -> Optional[Dict[str, Any]]:
 
         _write_cache(config, body)
         return registry
-    except Exception:
+    except Exception as exc:
+        _logger.debug("[Apidepth] Registry fetch failed: %s: %s", type(exc).__name__, _sanitize(str(exc)))
         return None
     finally:
         try:

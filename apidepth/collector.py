@@ -430,12 +430,13 @@ class Collector:
         key = config.api_key or ""
 
         if not key:
-            if not self._warned_no_key:
-                self._warned_no_key = True
-                _logger.warning(
-                    "[Apidepth] No API key configured — events are being dropped. "
-                    "Visit www.apidepth.io to create an account and get your key."
-                )
+            with self._stats_lock:
+                if not self._warned_no_key:
+                    self._warned_no_key = True
+                    _logger.warning(
+                        "[Apidepth] No API key configured — events are being dropped. "
+                        "Visit www.apidepth.io to create an account and get your key."
+                    )
             return
 
         _validate_api_key(key)
@@ -449,10 +450,10 @@ class Collector:
             payload["extra_vendors"] = extra
 
         body = json.dumps(payload, default=str).encode("utf-8")
-        parsed = self._collector_url(config)
 
         with self._send_lock:
             try:
+                parsed = self._collector_url(config)
                 conn = self._get_conn(parsed)
                 conn.request(
                     "POST",

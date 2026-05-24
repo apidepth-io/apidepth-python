@@ -76,13 +76,12 @@ def configure(**kwargs: Any) -> Configuration:
         TypeError: If an unknown configuration key is passed.
     """
     from apidepth.configuration import Configuration as _Cfg
-    _valid = {k for k in vars(_Cfg()) if not k.startswith("_")}
-    unknown = set(kwargs) - _valid
+    unknown = set(kwargs) - _Cfg.VALID_KEYS
     if unknown:
         raise TypeError(
             f"apidepth.configure() got unexpected keyword argument(s): "
             f"{', '.join(sorted(unknown))}. "
-            f"Valid options: {', '.join(sorted(_valid))}."
+            f"Valid options: {', '.join(sorted(_Cfg.VALID_KEYS))}."
         )
     config = get_configuration()
     for key, value in kwargs.items():

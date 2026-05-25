@@ -75,8 +75,7 @@ class ApidepthConfig(AppConfig):
             from django.conf import settings as django_settings
 
             apidepth_settings = getattr(django_settings, "APIDEPTH", {})
-            for key, value in apidepth_settings.items():
-                setattr(config, key, value)
+            apidepth.configure(**apidepth_settings)
         except Exception as exc:
             logging.getLogger("apidepth").warning(
                 "[Apidepth] Failed to apply APIDEPTH settings: %s. "

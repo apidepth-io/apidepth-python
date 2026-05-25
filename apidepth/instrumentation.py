@@ -67,6 +67,7 @@ from urllib.parse import urlparse
 
 _requests_patched = False
 _httpx_patched = False
+_fork_safety_registered = False
 
 
 def instrument() -> None:
@@ -76,10 +77,20 @@ def instrument() -> None:
     are not installed are silently skipped.  Safe to call multiple times —
     subsequent calls after the first are no-ops.
 
+    Also registers fork-safety (``os.register_at_fork``) for gunicorn/uWSGI
+    workers on the first call so that forked child processes each get a fresh
+    :class:`~apidepth.collector.Collector` with its own flush thread.
+
     Call this once at application startup **after** :func:`apidepth.configure`.
     Framework integrations (Django, Flask) call it automatically inside their
     boot hooks.
     """
+    global _fork_safety_registered
+    if not _fork_safety_registered:
+        from apidepth.collector import Collector
+
+        Collector.register_fork_safety()
+        _fork_safety_registered = True
     _patch_requests()
     _patch_httpx()
 
@@ -106,9 +117,7 @@ def _patch_requests() -> None:
 
     original = requests.adapters.HTTPAdapter.send
 
-    def _patched_send(
-        adapter_self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
-    ):
+    def _patched_send(adapter_self, request, **kwargs):
         """Instrumented replacement for ``HTTPAdapter.send``.
 
         Early-exit conditions (evaluated cheapest-first):
@@ -123,52 +132,20 @@ def _patch_requests() -> None:
         config = apidepth.get_configuration()
 
         if not config.enabled:
-            return original(
-                adapter_self,
-                request,
-                stream=stream,
-                timeout=timeout,
-                verify=verify,
-                cert=cert,
-                proxies=proxies,
-            )
+            return original(adapter_self, request, **kwargs)
 
         parsed = urlparse(request.url)
         host = parsed.hostname or ""
 
         if host in config.ignored_hosts:
-            return original(
-                adapter_self,
-                request,
-                stream=stream,
-                timeout=timeout,
-                verify=verify,
-                cert=cert,
-                proxies=proxies,
-            )
+            return original(adapter_self, request, **kwargs)
 
         if not _sampled(config):
-            return original(
-                adapter_self,
-                request,
-                stream=stream,
-                timeout=timeout,
-                verify=verify,
-                cert=cert,
-                proxies=proxies,
-            )
+            return original(adapter_self, request, **kwargs)
 
         start = time.monotonic()
         try:
-            response = original(
-                adapter_self,
-                request,
-                stream=stream,
-                timeout=timeout,
-                verify=verify,
-                cert=cert,
-                proxies=proxies,
-            )
+            response = original(adapter_self, request, **kwargs)
             duration_ms = _elapsed_ms(start)
             _record_success(
                 method=request.method.upper(),

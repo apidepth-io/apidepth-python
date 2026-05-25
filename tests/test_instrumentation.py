@@ -37,6 +37,7 @@ def _restore_originals():
     httpx.AsyncClient.send = _ORIGINAL_HTTPX_ASYNC_SEND
     instrumentation._requests_patched = False
     instrumentation._httpx_patched = False
+    instrumentation._fork_safety_registered = False
 
 
 @pytest.fixture(autouse=True)

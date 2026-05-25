@@ -304,7 +304,7 @@ def _apply_vendor_normalizers(rules: List[Tuple[re.Pattern, str]], path: str) ->
     """
     for pattern, replacement in rules:
         if pattern.search(path):
-            return pattern.sub(replacement, path)
+            return pattern.sub(replacement, path, count=1)
     return path
 
 

@@ -229,8 +229,9 @@ def test_emit_stale_ignores_non_list():
 def test_emit_stale_skips_non_string_entries(caplog):
     with caplog.at_level("WARNING", logger="apidepth"):
         rl._emit_stale_warnings([42, None, "real-vendor"])
-    assert "real-vendor" in caplog.text
-    assert "42" not in caplog.text
+    messages = [r.message for r in caplog.records]
+    assert any("real-vendor" in m for m in messages)
+    assert not any("42" in m for m in messages)
 
 
 def test_emit_stale_empty_list_is_noop(caplog):
@@ -575,13 +576,15 @@ def test_load_and_start_always_starts_refresh_thread(cfg):
     mock_thread.assert_called_once()
 
 
-def test_load_and_start_registers_fork_safety(cfg):
-    with (
-        patch("apidepth.registry_loader._fetch_remote", return_value=None),
-        patch("apidepth.registry_loader._load_from_disk", return_value=None),
-        patch("apidepth.registry_loader._start_refresh_thread"),
-        patch("apidepth.collector.Collector.register_fork_safety") as mock_fork,
-        patch("apidepth.get_configuration", return_value=cfg),
-    ):
-        rl.load_and_start()
-    mock_fork.assert_called_once()
+def test_instrument_registers_fork_safety():
+    """instrument() must call Collector.register_fork_safety() on first invocation."""
+    from apidepth import instrumentation
+
+    # Reset the guard so the call fires.
+    instrumentation._fork_safety_registered = False
+    try:
+        with patch("apidepth.collector.Collector.register_fork_safety") as mock_fork:
+            instrumentation.instrument()
+        mock_fork.assert_called_once()
+    finally:
+        instrumentation._fork_safety_registered = False

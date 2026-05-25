@@ -9,7 +9,7 @@ read their own config sources and write into the same singleton during
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Union
 
 
 class Configuration:
@@ -98,11 +98,20 @@ class Configuration:
         self.flush_interval: int = 20
         self.registry_refresh_interval: int = 6 * 60 * 60
         self.registry_cache_path: str = "/tmp/apidepth_registry.json"  # nosec B108 — public read-only registry cache, not sensitive data
-        self.ignored_hosts: List[str] = []
+        self._ignored_hosts: FrozenSet[str] = frozenset()
         self.on_flush_error: Optional[Callable[[Exception, Dict], None]] = None
         self.environment: Optional[str] = None
         self.sample_rate: float = 1.0
         self.extra_vendors: Dict[str, str] = {}
+
+    @property
+    def ignored_hosts(self) -> FrozenSet[str]:
+        """Hostnames to exclude from instrumentation, stored as a frozenset for O(1) lookup."""
+        return self._ignored_hosts
+
+    @ignored_hosts.setter
+    def ignored_hosts(self, value: Union[Iterable[str], None]) -> None:
+        self._ignored_hosts = frozenset(value) if value else frozenset()
 
     def __repr__(self) -> str:  # pragma: no cover
         return (

@@ -31,7 +31,7 @@ def test_configure_sets_sample_rate():
 def test_configure_sets_ignored_hosts():
     hosts = ["internal.example.com", "other.internal"]
     config = apidepth.configure(ignored_hosts=hosts)
-    assert config.ignored_hosts == hosts
+    assert config.ignored_hosts == frozenset(hosts)
 
 
 def test_configure_sets_multiple_kwargs():

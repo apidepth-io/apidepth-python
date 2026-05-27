@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.0...apidepth-v0.2.1) (2026-05-27)
+
+
+### Documentation
+
+* Getting started section, How it works, consistent What gets captured table ([#2](https://github.com/apidepth-io/apidepth-python/issues/2)) ([75e322a](https://github.com/apidepth-io/apidepth-python/commit/75e322abf5e2b65ffd276f9becde5d2df0ccffae))
+
 ## [0.2.0](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.1.1...apidepth-v0.2.0) (2026-05-25)
 
 

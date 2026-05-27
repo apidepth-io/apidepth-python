@@ -219,8 +219,8 @@ def _parse_duration_ms(s: str) -> Optional[int]:
         s: Duration string, e.g. ``"1s"``, ``"20ms"``, ``"1m30s"``, ``"2h"``.
 
     Returns:
-        Total milliseconds as an integer, or ``None`` if the string contains
-        no recognised unit tokens or the total is zero.
+        Total milliseconds as an integer (including ``0`` for ``"0ms"``), or
+        ``None`` if the string contains no recognised unit tokens.
 
     Examples::
 

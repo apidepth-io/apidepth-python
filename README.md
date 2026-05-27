@@ -10,6 +10,20 @@ Zero config for supported vendors. No code changes to your existing HTTP calls.
 
 ---
 
+## How it works
+
+**Real traffic, not synthetic probes.** Every outbound HTTP call your application makes to a known vendor is timed at the socket level, tagged with outcome and environment metadata, and batched to the Apidepth collector in the background. The latency number in your dashboard is the number your users feel — not a probe running from a data center somewhere else.
+
+**Fleet benchmarking.** Because Apidepth aggregates anonymized timing data across all customers, your dashboard shows not just "your Stripe p95 is 420ms" but "the fleet median is 280ms — you may have a regional routing issue." That comparison is only possible with real traffic from real deployments, which is why no synthetic probe tool can offer it.
+
+**Proof of Innocence.** When all endpoints to a vendor spike simultaneously, Apidepth surfaces a verdict: *isolated* (the spike is yours alone — likely your code or infrastructure) or *tracking* (the fleet sees the same thing — vendor-side). The attribution card makes it fast to tell ops "it's Stripe, not us."
+
+**Alerts and weekly digest.** Apidepth fires alerts when vendor latency crosses your configured threshold and sends a weekly digest summarizing what changed. Monitoring without alerting is passive; this is working for you.
+
+**Rate limit intelligence.** Apidepth tracks 429 patterns and projects quota burn-down before you hit the ceiling — with a burn-down card showing time-to-throttle at current request rate.
+
+---
+
 ## Installation
 
 ```bash
@@ -28,7 +42,7 @@ pip install "apidepth[httpx]"
 
 ---
 
-## Quick start
+## Getting started
 
 ### Django
 
@@ -109,22 +123,30 @@ Collector.register_fork_safety()
 
 Every outbound HTTP request to a recognised vendor produces one event:
 
-| Field | Example |
+| Field | Description |
 |---|---|
-| `vendor` | `"stripe"` |
-| `endpoint` | `"/v1/charges/:id"` |
-| `method` | `"POST"` |
-| `status` | `200` |
-| `outcome` | `"success"` / `"client_error"` / `"server_error"` / `"timeout"` |
-| `duration_ms` | `234` |
-| `cold_start` | `false` (always — see [Known differences](#known-differences-from-the-ruby-gem)) |
-| `env` | `"production"` |
-| `ts` | `1747008000000` (epoch ms) |
-| `rl_remaining` | `4999` (when rate limit headers present) |
-| `rl_limit` | `5000` |
-| `rl_reset_at` | `1747008060000` (epoch ms) |
+| `vendor` | Vendor slug, e.g. `"stripe"`, `"openai"` |
+| `endpoint` | Normalized path, e.g. `"/v1/charges/:id"` |
+| `method` | HTTP verb: `"GET"`, `"POST"`, etc. |
+| `status` | HTTP status code, or `None` on timeout |
+| `outcome` | `"success"`, `"client_error"`, `"server_error"`, `"timeout"`, `"unknown"` |
+| `duration_ms` | Wall-clock time in milliseconds |
+| `cold_start` | Always `False` — see [Known differences](#known-differences-from-the-ruby-gem) |
+| `env` | Environment tag from `environment` config option |
+| `ts` | Unix timestamp in milliseconds |
+| `rl_remaining` | Remaining quota, e.g. `4999` — present when vendor rate limit headers are found |
+| `rl_limit` | Total quota, e.g. `5000` — present when vendor rate limit headers are found |
+| `rl_reset_at` | Quota reset time in epoch milliseconds — present when vendor rate limit headers are found |
 
-**Never captured:** request/response bodies, headers, query parameters, credentials.
+### What is never captured
+
+- Request or response **bodies**
+- Request or response **headers** (including Authorization)
+- **Query string parameters**
+- Any credential, token, or secret your application uses to authenticate with a vendor
+- User identifiers or PII of any kind
+
+Path normalization strips resource IDs before the event leaves your server. `/v1/charges/ch_3Ox4Kz2e` becomes `/v1/charges/:id`.
 
 ---
 

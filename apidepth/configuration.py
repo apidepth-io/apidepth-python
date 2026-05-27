@@ -9,7 +9,7 @@ read their own config sources and write into the same singleton during
 
 from __future__ import annotations
 
-from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Union
+from typing import Callable, Dict, FrozenSet, Iterable, Optional, Union
 
 
 class Configuration:

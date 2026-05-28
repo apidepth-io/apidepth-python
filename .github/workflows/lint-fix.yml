@@ -1,0 +1,15 @@
+name: Lint Fix
+
+# Runs ruff --fix and ruff format on every PR and commits corrections back to
+# the PR branch. The existing lint.yml check workflow re-runs after the commit
+# and will fail if any issues remain that ruff cannot auto-fix.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-fix:
+    uses: apidepth-io/apidepth-tooling/.github/workflows/lint-fix-python.yml@main
+    permissions:
+      contents: write

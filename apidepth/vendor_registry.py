@@ -124,8 +124,8 @@ _GENERIC_PATTERNS: List[Tuple[re.Pattern, str]] = [
 #   (?(   — conditional group
 #   (.+)+ — nested quantifiers (catastrophic backtracking risk)
 _UNSAFE_PATTERN = re.compile(
-    r"\(\?[{#]"             # (?{ code execution, (?# comment
-    r"|\(\?\("              # (?( conditional group
+    r"\(\?[{#]"  # (?{ code execution, (?# comment
+    r"|\(\?\("  # (?( conditional group
     r"|\([^)]*[+*]\)[+*?]"  # nested quantifier: (.+)+, (a*)*, (a+)?
 )
 

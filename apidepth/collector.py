@@ -352,9 +352,7 @@ class Collector:
                 total_dropped = self._total_dropped
             self._invoke_error_callback(exc, len(events), failures, total_dropped)
             if always_warn:
-                _logger.warning(
-                    "[Apidepth] Final flush failed: %s: %s", type(exc).__name__, exc
-                )
+                _logger.warning("[Apidepth] Final flush failed: %s: %s", type(exc).__name__, exc)
             elif failures >= FAILURE_THRESHOLD:
                 _logger.warning(
                     "[Apidepth] Flush has failed %d times consecutively. "

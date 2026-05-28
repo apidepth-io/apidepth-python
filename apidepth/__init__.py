@@ -87,8 +87,9 @@ def configure(**kwargs: Any) -> Configuration:
             f"Valid options: {', '.join(sorted(_Cfg.VALID_KEYS))}."
         )
     config = get_configuration()
-    for key, value in kwargs.items():
-        setattr(config, key, value)
+    with _configuration_lock:
+        for key, value in kwargs.items():
+            setattr(config, key, value)
     return config
 
 

@@ -231,21 +231,7 @@ class Collector:
         at ``WARNING`` level on failure regardless of the consecutive-failure
         count.
         """
-        events = self._drain_queue()
-        if not events:
-            return
-        try:
-            self._send_batch(events)
-            with self._stats_lock:
-                self._consecutive_failures = 0
-                self._last_flush_at = time.time()
-        except Exception as exc:
-            with self._stats_lock:
-                self._consecutive_failures += 1
-                failures = self._consecutive_failures
-                total_dropped = self._total_dropped
-            self._invoke_error_callback(exc, len(events), failures, total_dropped)
-            _logger.warning("[Apidepth] Final flush failed: %s: %s", type(exc).__name__, exc)
+        self._do_flush(always_warn=True)
 
     def stats(self) -> Dict[str, Any]:
         """Return a snapshot of the collector's operational metrics.
@@ -347,6 +333,10 @@ class Collector:
         network error.  Logs a warning after :data:`FAILURE_THRESHOLD`
         consecutive failures to surface persistent problems.
         """
+        self._do_flush(always_warn=False)
+
+    def _do_flush(self, *, always_warn: bool) -> None:
+        """Shared flush implementation used by :meth:`flush` and :meth:`_safe_flush`."""
         events = self._drain_queue()
         if not events:
             return
@@ -361,7 +351,9 @@ class Collector:
                 failures = self._consecutive_failures
                 total_dropped = self._total_dropped
             self._invoke_error_callback(exc, len(events), failures, total_dropped)
-            if failures >= FAILURE_THRESHOLD:
+            if always_warn:
+                _logger.warning("[Apidepth] Final flush failed: %s: %s", type(exc).__name__, exc)
+            elif failures >= FAILURE_THRESHOLD:
                 _logger.warning(
                     "[Apidepth] Flush has failed %d times consecutively. "
                     "Events are being dropped. Check your API key and network connectivity. "

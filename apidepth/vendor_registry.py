@@ -110,7 +110,7 @@ BUNDLED_BASELINE: dict = {
 _GENERIC_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), "/:uuid"),
     (re.compile(r"/\d{4,}"), "/:id"),
-    (re.compile(r"/[a-z0-9]{24,}", re.IGNORECASE), "/:token"),
+    (re.compile(r"/[a-f0-9]{24,}", re.IGNORECASE), "/:token"),
 ]
 
 # Constructs that can enable arbitrary code execution inside Python's re
@@ -119,14 +119,15 @@ _GENERIC_PATTERNS: List[Tuple[re.Pattern, str]] = [
 # of either a bug or a compromise.
 #
 # Blocked:
-#   (?{   — conditional / code-execution construct
-#   (?<   — named group / lookbehind  (not dangerous by itself, but excluded
-#   (?!   — negative lookahead        for simplicity — registry patterns
-#   (?=   — positive lookahead        should be simple substring replacers)
-#   (?#   — inline comment
-#   +?    — possessive / lazy quantifier combinations
-#   *??   — double-lazy quantifier (catastrophic backtracking risk)
-_UNSAFE_PATTERN = re.compile(r"\(\?[{<!=]|\(\?#|\+\?|\*\?\?")
+#   (?{   — code-execution construct
+#   (?#   — inline comment (unnecessary in path patterns)
+#   (?(   — conditional group
+#   (.+)+ — nested quantifiers (catastrophic backtracking risk)
+_UNSAFE_PATTERN = re.compile(
+    r"\(\?[{#]"  # (?{ code execution, (?# comment
+    r"|\(\?\("  # (?( conditional group
+    r"|\([^)]*[+*]\)[+*?]"  # nested quantifier: (.+)+, (a*)*, (a+)?
+)
 
 
 class VendorRegistry:
@@ -244,6 +245,14 @@ class VendorRegistry:
         """Return the number of distinct vendor slugs in the live registry."""
         with cls._lock:
             return len(set(cls._hosts.values()))
+
+    @classmethod
+    def reset(cls) -> None:
+        """Reset the registry to the bundled baseline. Intended for test isolation."""
+        with cls._lock:
+            cls._hosts = _build_hosts(BUNDLED_BASELINE)
+            cls._patterns = _build_patterns(BUNDLED_BASELINE)
+            cls._version = BUNDLED_BASELINE["version"]
 
 
 # ---------------------------------------------------------------------------

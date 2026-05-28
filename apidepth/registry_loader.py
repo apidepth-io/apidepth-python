@@ -148,6 +148,8 @@ def _start_refresh_thread() -> threading.Thread:
 
             cfg = apidepth.get_configuration()
             time.sleep(cfg.registry_refresh_interval)
+            if not cfg.api_key:
+                continue
             registry = _fetch_remote(cfg)
             if registry:
                 from apidepth.vendor_registry import VendorRegistry

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.1...apidepth-v0.2.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* normalize request headers to lowercase before rate-limit extraction ([#6](https://github.com/apidepth-io/apidepth-python/issues/6)) ([2f248a7](https://github.com/apidepth-io/apidepth-python/commit/2f248a7a54cce75b1c7fe3e67ee5193ee6adaa75))
+
 ## [0.2.1](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.0...apidepth-v0.2.1) (2026-05-27)
 
 

@@ -5,5 +5,5 @@ collector can correlate data-quality issues with specific SDK releases without
 needing a support ticket.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 VERSION = __version__  # backwards-compatible alias used throughout the SDK

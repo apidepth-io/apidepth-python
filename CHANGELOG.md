@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.2...apidepth-v0.2.3) (2026-05-29)
+
+
+### Bug Fixes
+
+* detect cold starts via per-process host registry ([#8](https://github.com/apidepth-io/apidepth-python/issues/8)) ([6ff9982](https://github.com/apidepth-io/apidepth-python/commit/6ff99821107df4c81f53eed28e0a9bb348243756))
+
 ## [0.2.2](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.1...apidepth-v0.2.2) (2026-05-29)
 
 

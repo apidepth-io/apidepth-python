@@ -95,6 +95,11 @@ def test_build_passes_through_cold_start_false():
     assert result["cold_start"] is False
 
 
+def test_build_passes_through_cold_start_true():
+    result = build(_valid_attrs(cold_start=True))
+    assert result["cold_start"] is True
+
+
 def test_build_passes_through_env():
     result = build(_valid_attrs(env="staging"))
     assert result["env"] == "staging"

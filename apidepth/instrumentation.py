@@ -152,7 +152,7 @@ def _patch_requests() -> None:
                 host=host,
                 path=parsed.path or "/",
                 status=response.status_code,
-                headers=dict(response.headers),
+                headers={k.lower(): v for k, v in response.headers.items()},
                 duration_ms=duration_ms,
             )
             return response

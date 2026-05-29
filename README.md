@@ -131,7 +131,7 @@ Every outbound HTTP request to a recognised vendor produces one event:
 | `status` | HTTP status code, or `None` on timeout |
 | `outcome` | `"success"`, `"client_error"`, `"server_error"`, `"timeout"`, `"unknown"` |
 | `duration_ms` | Wall-clock time in milliseconds |
-| `cold_start` | Always `False` — see [Known differences](#known-differences-from-the-ruby-gem) |
+| `cold_start` | `True` on the first request to a host in this process; `False` thereafter |
 | `env` | Environment tag from `environment` config option |
 | `ts` | Unix timestamp in milliseconds |
 | `rl_remaining` | Remaining quota, e.g. `4999` — present when vendor rate limit headers are found |
@@ -220,20 +220,12 @@ Python 3.9–3.13. No required runtime dependencies (stdlib only). `requests` an
 
 ---
 
-## Known differences from the Ruby gem
+## Differences from the Ruby gem
 
-### `cold_start` is always `false`
+### `cold_start` detection
 
-The Ruby gem tags the **first** outbound request on each TCP connection with `cold_start: true` using `Net::HTTP#started?`. The Apidepth collector uses this flag to exclude DNS + TCP + TLS handshake overhead from latency percentile calculations (p50/p95/p99), keeping those metrics representative of steady-state vendor performance.
+The Ruby gem uses `Net::HTTP#started?` to tag the first request on each TCP connection. The Python SDK cannot inspect socket reuse via a public API, so it uses a per-process host registry instead: the **first request to each hostname** within a process lifetime is tagged `cold_start: true`. This accurately captures DNS + TCP + TLS overhead for the cases that matter most — process startup and serverless invocations.
 
-Neither `requests` (backed by urllib3) nor `httpx` exposes a public API for detecting whether the underlying socket is a keep-alive reuse. The Python SDK therefore always sends `cold_start: false`.
+Forked workers (gunicorn, uWSGI) each get a fresh registry via `os.register_at_fork`, so the first request per worker is correctly tagged cold.
 
-**Practical impact depends on your traffic pattern:**
-
-| Traffic pattern | Impact |
-|---|---|
-| High-throughput web service | **Negligible** — cold starts are a tiny fraction of total requests; percentile inflation is unmeasurable |
-| Low-throughput service / cron job | **Noticeable** — the first request per run pays ~50–200 ms of connection overhead that isn't excluded from percentiles; p95/p99 may read slightly higher than in Ruby |
-| Serverless / short-lived worker | **Material** — every invocation starts cold; all latency data includes connection overhead; comparisons against Ruby-instrumented services will show the Python side as systematically higher |
-
-The raw duration values are accurate — only the percentile statistics are affected. If cold-start exclusion matters for your environment, filter those events manually in your dashboard (e.g. a warm-up request flag in thread-local state) until the underlying libraries expose the required connection-state API.
+**Known limitation:** mid-process connection re-establishment after a keep-alive timeout is not detected. For long-lived, low-throughput services this means occasional reconnect latency won't be excluded from percentile calculations. For high-throughput services and serverless workers the behaviour is equivalent to the Ruby gem.

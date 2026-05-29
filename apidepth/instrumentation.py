@@ -26,36 +26,27 @@ Idempotency
 :func:`instrument` is safe to call multiple times — a module-level boolean
 per library prevents double-patching.
 
-Known divergence from the Ruby gem
-------------------------------------
+Cold-start detection
+--------------------
 The Ruby gem detects cold starts via ``Net::HTTP#started?``: it tags the
 **first** request on a fresh connection with ``cold_start: true`` so the
 Apidepth collector can exclude DNS + TCP + TLS handshake overhead from
 latency percentile calculations (p50 / p95 / p99).
 
-Neither *requests* (backed by urllib3's ``PoolManager``) nor *httpx* exposes
-a public API for inspecting whether the underlying socket is a reused
-keep-alive connection.  Accessing private internals would be fragile across
-library versions and minor releases, so the Python SDK always sends
-``cold_start: False``.
+Neither *requests* nor *httpx* exposes a public API for inspecting whether
+the underlying socket is a reused keep-alive connection.  Instead, the Python
+SDK uses a per-process host registry: the **first request to each hostname**
+within a process lifetime is tagged ``cold_start: True``.  This accurately
+captures the highest-impact scenario (DNS + TCP + TLS overhead) without
+touching private library internals.
 
-Impact by traffic pattern:
+The registry is cleared after ``os.fork()`` so each forked worker (gunicorn,
+uWSGI) correctly marks its own first requests as cold.
 
-* **High-throughput web services** — Negligible.  Cold starts are a tiny
-  fraction of total requests; percentile inflation is unmeasurable.
-* **Low-throughput services / cron jobs** — Noticeable.  The first request
-  in each run pays DNS + TCP + TLS overhead (~50–200 ms extra) but is not
-  excluded from percentile calculations.  p95/p99 may read slightly worse
-  than the Ruby-instrumented equivalent.
-* **Serverless / short-lived workers** — Material.  Every invocation starts
-  cold; all latency data includes connection overhead.  Absolute durations
-  are still accurate; comparisons against Ruby-instrumented services will
-  show the Python side as systematically higher.
-
-If cold-start exclusion is important for your environment, instrument a
-custom metric (e.g. first-request flag set in a thread-local) and filter
-those events in your dashboard until the underlying libraries expose the
-required connection-state API.
+Known limitation: mid-process connection re-establishment after a keep-alive
+timeout is not detected — only the first request per host per process is
+tagged.  This is a minor gap for long-lived, low-throughput services; for
+serverless and short-lived workers the behaviour is identical to the Ruby gem.
 """
 
 from __future__ import annotations
@@ -68,6 +59,7 @@ from urllib.parse import urlparse
 _requests_patched = False
 _httpx_patched = False
 _fork_safety_registered = False
+_cold_start_hosts: set = set()
 
 
 def instrument() -> None:
@@ -90,6 +82,12 @@ def instrument() -> None:
         from apidepth.collector import Collector
 
         Collector.register_fork_safety()
+        try:
+            import os as _os
+
+            _os.register_at_fork(after_in_child=_clear_cold_start_hosts)
+        except AttributeError:
+            pass  # Windows — os.register_at_fork is POSIX-only
         _fork_safety_registered = True
     _patch_requests()
     _patch_httpx()
@@ -143,6 +141,7 @@ def _patch_requests() -> None:
         if not _sampled(config):
             return original(adapter_self, request, **kwargs)
 
+        cold_start = _is_cold_start(host)
         start = time.monotonic()
         try:
             response = original(adapter_self, request, **kwargs)
@@ -154,6 +153,7 @@ def _patch_requests() -> None:
                 status=response.status_code,
                 headers={k.lower(): v for k, v in response.headers.items()},
                 duration_ms=duration_ms,
+                cold_start=cold_start,
             )
             return response
         except Exception as exc:
@@ -164,6 +164,7 @@ def _patch_requests() -> None:
                 host=host,
                 path=parsed.path or "/",
                 duration_ms=duration_ms,
+                cold_start=cold_start,
                 is_requests_timeout=True,
             )
             raise
@@ -205,6 +206,7 @@ def _patch_httpx() -> None:
         if not config.enabled or host in config.ignored_hosts or not _sampled(config):
             return original_sync(client_self, request, **kwargs)
 
+        cold_start = _is_cold_start(host)
         start = time.monotonic()
         try:
             response = original_sync(client_self, request, **kwargs)
@@ -216,6 +218,7 @@ def _patch_httpx() -> None:
                 status=response.status_code,
                 headers=dict(response.headers),
                 duration_ms=duration_ms,
+                cold_start=cold_start,
             )
             return response
         except Exception as exc:
@@ -226,6 +229,7 @@ def _patch_httpx() -> None:
                 host=host,
                 path=str(request.url.path),
                 duration_ms=duration_ms,
+                cold_start=cold_start,
                 is_requests_timeout=False,
             )
             raise
@@ -240,6 +244,7 @@ def _patch_httpx() -> None:
         if not config.enabled or host in config.ignored_hosts or not _sampled(config):
             return await original_async(client_self, request, **kwargs)
 
+        cold_start = _is_cold_start(host)
         start = time.monotonic()
         try:
             response = await original_async(client_self, request, **kwargs)
@@ -251,6 +256,7 @@ def _patch_httpx() -> None:
                 status=response.status_code,
                 headers=dict(response.headers),
                 duration_ms=duration_ms,
+                cold_start=cold_start,
             )
             return response
         except Exception as exc:
@@ -261,6 +267,7 @@ def _patch_httpx() -> None:
                 host=host,
                 path=str(request.url.path),
                 duration_ms=duration_ms,
+                cold_start=cold_start,
                 is_requests_timeout=False,
             )
             raise
@@ -283,6 +290,7 @@ def _record_success(
     status: int,
     headers: Dict[str, str],
     duration_ms: int,
+    cold_start: bool,
 ) -> None:
     """Build and enqueue a successful-response event.
 
@@ -327,10 +335,7 @@ def _record_success(
                     "status": status,
                     "outcome": outcome,
                     "duration_ms": duration_ms,
-                    # Always False — neither requests nor httpx exposes a public API to
-                    # detect keep-alive connection reuse (Ruby uses Net::HTTP#started?).
-                    # See the module docstring for impact details.
-                    "cold_start": False,
+                    "cold_start": cold_start,
                     "env": _resolve_env(),
                     "ts": now_ms,
                     **(rl or {}),
@@ -348,6 +353,7 @@ def _record_timeout_if_applicable(
     host: str,
     path: str,
     duration_ms: int,
+    cold_start: bool,
     is_requests_timeout: bool,
 ) -> None:
     """Build and enqueue a timeout event if *exc* is a recognised timeout type.
@@ -405,8 +411,7 @@ def _record_timeout_if_applicable(
                     "outcome": "timeout",
                     "error_class": type(exc).__name__,
                     "duration_ms": duration_ms,
-                    # Always False — see module docstring for the cold_start limitation.
-                    "cold_start": False,
+                    "cold_start": cold_start,
                     "env": _resolve_env(),
                     "ts": _now_ms(),
                 }
@@ -419,6 +424,27 @@ def _record_timeout_if_applicable(
 # ---------------------------------------------------------------------------
 # Shared utility helpers
 # ---------------------------------------------------------------------------
+
+
+def _is_cold_start(host: str) -> bool:
+    """Return ``True`` if this is the first request to *host* in this process.
+
+    Adds *host* to the registry on first call, so subsequent calls for the
+    same host return ``False``.
+    """
+    global _cold_start_hosts
+    if host in _cold_start_hosts:
+        return False
+    _cold_start_hosts.add(host)
+    return True
+
+
+def _clear_cold_start_hosts() -> None:
+    """Reset the cold-start host registry.  Called after ``os.fork()`` so each
+    worker process marks its own first requests as cold.
+    """
+    global _cold_start_hosts
+    _cold_start_hosts = set()
 
 
 def _elapsed_ms(start: float) -> int:

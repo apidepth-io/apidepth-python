@@ -38,6 +38,7 @@ def _restore_originals():
     instrumentation._requests_patched = False
     instrumentation._httpx_patched = False
     instrumentation._fork_safety_registered = False
+    instrumentation._clear_cold_start_hosts()
 
 
 @pytest.fixture(autouse=True)
@@ -253,12 +254,90 @@ def test_recorded_event_has_correct_fields():
     assert evt["method"] == "GET"
     assert evt["status"] == 200
     assert evt["outcome"] == "success"
-    assert evt["cold_start"] is False
+    assert evt["cold_start"] is True  # first request to this host in the process
     assert evt["env"] == "test"
     assert isinstance(evt["duration_ms"], int)
     assert isinstance(evt["ts"], int)
     assert evt["ts"] > 0
     assert "endpoint" in evt
+
+
+@responses_mock.activate
+def test_cold_start_false_on_second_request_to_same_host():
+    apidepth.configure(api_key="apd_live_test", environment="test")
+    instrumentation.instrument()
+    responses_mock.add(
+        responses_mock.GET,
+        "https://api.stripe.com/v1/charges",
+        json={"data": []},
+        status=200,
+    )
+    responses_mock.add(
+        responses_mock.GET,
+        "https://api.stripe.com/v1/charges",
+        json={"data": []},
+        status=200,
+    )
+    requests.get("https://api.stripe.com/v1/charges")
+    requests.get("https://api.stripe.com/v1/charges")
+
+    events = Collector.instance()._drain_queue()
+    assert len(events) == 2
+    assert events[0]["cold_start"] is True
+    assert events[1]["cold_start"] is False
+
+
+@responses_mock.activate
+def test_cold_start_independent_per_host():
+    apidepth.configure(api_key="apd_live_test", environment="test")
+    instrumentation.instrument()
+    responses_mock.add(
+        responses_mock.GET,
+        "https://api.stripe.com/v1/charges",
+        json={},
+        status=200,
+    )
+    responses_mock.add(
+        responses_mock.POST,
+        "https://api.openai.com/v1/chat/completions",
+        json={},
+        status=200,
+    )
+    requests.get("https://api.stripe.com/v1/charges")
+    requests.post("https://api.openai.com/v1/chat/completions")
+
+    events = Collector.instance()._drain_queue()
+    assert len(events) == 2
+    stripe_evt = next(e for e in events if e["vendor"] == "stripe")
+    openai_evt = next(e for e in events if e["vendor"] == "openai")
+    assert stripe_evt["cold_start"] is True
+    assert openai_evt["cold_start"] is True
+
+
+@responses_mock.activate
+def test_clear_cold_start_hosts_resets_registry():
+    apidepth.configure(api_key="apd_live_test", environment="test")
+    instrumentation.instrument()
+    responses_mock.add(
+        responses_mock.GET,
+        "https://api.stripe.com/v1/charges",
+        json={},
+        status=200,
+    )
+    responses_mock.add(
+        responses_mock.GET,
+        "https://api.stripe.com/v1/charges",
+        json={},
+        status=200,
+    )
+    requests.get("https://api.stripe.com/v1/charges")
+    instrumentation._clear_cold_start_hosts()
+    requests.get("https://api.stripe.com/v1/charges")
+
+    events = Collector.instance()._drain_queue()
+    assert len(events) == 2
+    assert events[0]["cold_start"] is True
+    assert events[1]["cold_start"] is True  # cold again after reset
 
 
 @responses_mock.activate

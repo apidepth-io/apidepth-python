@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.3...apidepth-v0.3.0) (2026-05-30)
+
+
+### Features
+
+* onboarding cluster — setup/test CLI, smart ignored host defaults, framework detection ([#10](https://github.com/apidepth-io/apidepth-python/issues/10)) ([87c492a](https://github.com/apidepth-io/apidepth-python/commit/87c492a404628d845926154a4e832d2806a1443e))
+
 ## [0.2.3](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.2...apidepth-v0.2.3) (2026-05-29)
 
 

@@ -161,6 +161,20 @@ def test_requests_ignored_host_records_nothing():
     assert Collector.instance().stats()["queue_size"] == 0
 
 
+@responses_mock.activate
+def test_requests_glob_ignored_host_records_nothing():
+    apidepth.configure(api_key="key", ignored_hosts=["*.internal"])
+    instrumentation.instrument()
+    responses_mock.add(
+        responses_mock.GET,
+        "http://api.internal/health",
+        json={},
+        status=200,
+    )
+    requests.get("http://api.internal/health")
+    assert Collector.instance().stats()["queue_size"] == 0
+
+
 # ---------------------------------------------------------------------------
 # requests: timeout recording
 # ---------------------------------------------------------------------------

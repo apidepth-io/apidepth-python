@@ -31,7 +31,8 @@ def test_configure_sets_sample_rate():
 def test_configure_sets_ignored_hosts():
     hosts = ["internal.example.com", "other.internal"]
     config = apidepth.configure(ignored_hosts=hosts)
-    assert config.ignored_hosts == frozenset(hosts)
+    # User hosts are present alongside the hard defaults
+    assert frozenset(hosts).issubset(config.ignored_hosts)
 
 
 def test_configure_sets_multiple_kwargs():
@@ -132,3 +133,51 @@ def test_sanitize_log_exactly_200_chars_unchanged():
     result = apidepth.sanitize_log(s)
     assert len(result) == 200
     assert result == s
+
+
+# =============================================================================
+# ignored_host() — hard defaults and glob matching
+# =============================================================================
+
+
+def test_hard_ignored_hosts_present_by_default():
+    config = Configuration()
+    for host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+        assert config.ignored_host(host), f"{host!r} should be ignored by default"
+
+
+def test_user_hosts_merged_with_hard_defaults():
+    config = Configuration()
+    config.ignored_hosts = ["api.internal.example.com"]
+    assert config.ignored_host("api.internal.example.com")
+    assert config.ignored_host("localhost")
+
+
+def test_glob_wildcard_ignored_host():
+    config = Configuration()
+    config.ignored_hosts = ["*.internal", "*.svc.cluster.local"]
+    assert config.ignored_host("api.internal")
+    assert config.ignored_host("db.internal")
+    assert config.ignored_host("service.svc.cluster.local")
+    assert not config.ignored_host("api.stripe.com")
+
+
+def test_collector_url_host_auto_ignored():
+    config = Configuration()
+    config.collector_url = "https://collector.apidepth.io/v1/events"
+    assert config.ignored_host("collector.apidepth.io")
+
+
+def test_collector_url_updates_ignored_hosts():
+    config = Configuration()
+    config.collector_url = "https://collector.apidepth.io/v1/events"
+    config.collector_url = "https://custom.collector.example.com/v1/events"
+    assert config.ignored_host("custom.collector.example.com")
+
+
+def test_malformed_collector_url_does_not_raise():
+    config = Configuration()
+    try:
+        config.collector_url = "not a url"
+    except Exception as exc:
+        raise AssertionError(f"Should not raise on malformed URL: {exc}") from exc

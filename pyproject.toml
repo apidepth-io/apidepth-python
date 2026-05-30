@@ -48,6 +48,9 @@ dev = [
     "ruff>=0.4",
 ]
 
+[project.scripts]
+apidepth = "apidepth.cli.main:main"
+
 [project.urls]
 Homepage = "https://www.apidepth.io"
 Source = "https://github.com/apidepth-io/apidepth-python"

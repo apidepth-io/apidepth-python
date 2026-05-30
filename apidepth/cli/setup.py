@@ -60,7 +60,7 @@ def run(argv: Optional[List[str]] = None) -> None:
     # Interactive: prompt for ignored hosts
     if not no_prompt:
         print("\nDefault ignored hosts (always skipped):")
-        for h in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+        for h in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):  # nosec B104
             print(f"  • {h}")
         print(f"  • {collector_url or 'collector.apidepth.io'}")
         print("\nAny internal API patterns to ignore? (comma-separated, wildcards ok)")

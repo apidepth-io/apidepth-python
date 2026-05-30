@@ -95,7 +95,7 @@ def _send_test_event(api_key: str, base_url: str) -> int:
 
     start = time.monotonic()
     try:
-        with urlopen(req, timeout=TIMEOUT_SECONDS) as resp:  # noqa: S310 — known HTTPS URL
+        with urlopen(req, timeout=TIMEOUT_SECONDS) as resp:  # noqa: S310  # nosec B310
             elapsed = round((time.monotonic() - start) * 1000)
             if resp.status in (200, 201, 204):
                 return elapsed

@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 # addresses only — wildcard internal patterns are not pre-populated because
 # silently swallowing traffic the developer wants to see is worse than showing
 # mystery vendors. The setup subcommand prompts for custom patterns.
-_HARD_IGNORED_HOSTS: Tuple[str, ...] = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+_HARD_IGNORED_HOSTS: Tuple[str, ...] = ("localhost", "127.0.0.1", "0.0.0.0", "::1")  # nosec B104
 
 
 class Configuration:

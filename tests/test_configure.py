@@ -142,7 +142,7 @@ def test_sanitize_log_exactly_200_chars_unchanged():
 
 def test_hard_ignored_hosts_present_by_default():
     config = Configuration()
-    for host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+    for host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):  # nosec B104
         assert config.ignored_host(host), f"{host!r} should be ignored by default"
 
 

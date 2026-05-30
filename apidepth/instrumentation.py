@@ -135,7 +135,7 @@ def _patch_requests() -> None:
         parsed = urlparse(request.url)
         host = parsed.hostname or ""
 
-        if host in config.ignored_hosts:
+        if config.ignored_host(host):
             return original(adapter_self, request, **kwargs)
 
         if not _sampled(config):
@@ -203,7 +203,7 @@ def _patch_httpx() -> None:
         config = apidepth.get_configuration()
         host = str(request.url.host)
 
-        if not config.enabled or host in config.ignored_hosts or not _sampled(config):
+        if not config.enabled or config.ignored_host(host) or not _sampled(config):
             return original_sync(client_self, request, **kwargs)
 
         cold_start = _is_cold_start(host)
@@ -241,7 +241,7 @@ def _patch_httpx() -> None:
         config = apidepth.get_configuration()
         host = str(request.url.host)
 
-        if not config.enabled or host in config.ignored_hosts or not _sampled(config):
+        if not config.enabled or config.ignored_host(host) or not _sampled(config):
             return await original_async(client_self, request, **kwargs)
 
         cold_start = _is_cold_start(host)

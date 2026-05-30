@@ -20,9 +20,11 @@ def main(argv=None) -> None:
 
     if subcommand == "setup":
         from apidepth.cli.setup import run
+
         run(rest)
     elif subcommand == "test":
         from apidepth.cli.test_cmd import run
+
         run(rest)
     elif subcommand in (None, "--help", "-h"):
         print("Usage: apidepth <subcommand> [options]")

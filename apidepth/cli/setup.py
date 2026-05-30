@@ -77,6 +77,7 @@ def run(argv: Optional[List[str]] = None) -> None:
     )
     if args.framework:
         from apidepth.cli.framework_detector import _build_result
+
         result = _build_result(
             args.framework,
             api_key=api_key,
@@ -89,6 +90,7 @@ def run(argv: Optional[List[str]] = None) -> None:
 
 def _open_browser(url: str) -> None:
     import platform
+
     system = platform.system()
     try:
         if system == "Darwin":
@@ -111,6 +113,7 @@ def _print_result(result, no_prompt: bool) -> None:
         answer = input(f"Write to {result.initializer_path}? [y/N] ").strip().lower()
         if answer == "y":
             import os
+
             os.makedirs(os.path.dirname(result.initializer_path) or ".", exist_ok=True)
             with open(result.initializer_path, "w") as f:
                 f.write(result.initializer_snippet)

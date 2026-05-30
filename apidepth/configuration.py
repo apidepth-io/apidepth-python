@@ -160,9 +160,7 @@ class Configuration:
         self._exact_ignored: frozenset = frozenset(
             h for h in all_hosts if "*" not in h and "?" not in h
         )
-        self._glob_patterns: List[str] = [
-            h for h in all_hosts if "*" in h or "?" in h
-        ]
+        self._glob_patterns: List[str] = [h for h in all_hosts if "*" in h or "?" in h]
         self._ignored_hosts: FrozenSet[str] = frozenset(all_hosts)
 
     def __repr__(self) -> str:  # pragma: no cover

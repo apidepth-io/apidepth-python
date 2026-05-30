@@ -8,7 +8,7 @@ import sys
 import time
 from typing import Optional
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 
 try:
     from apidepth.version import VERSION
@@ -51,6 +51,7 @@ class _TestError(Exception):
 def _load_config():
     try:
         import apidepth
+
         cfg = apidepth.get_configuration()
         api_key = cfg.api_key or os.environ.get("APIDEPTH_API_KEY")
         collector_url = cfg.collector_url or os.environ.get("APIDEPTH_COLLECTOR_URL")
@@ -62,21 +63,25 @@ def _load_config():
 
 def _send_test_event(api_key: str, base_url: str) -> int:
     url = f"{base_url}/v1/events"
-    payload = json.dumps({
-        "batch": [{
-            "vendor": "apidepth-test",
-            "endpoint": "/test",
-            "method": "GET",
-            "status": 200,
-            "outcome": "success",
-            "duration_ms": 1,
-            "cold_start": False,
-            "env": "test",
-            "ts": int(time.time() * 1000),
-            "test": True,
-        }],
-        "sdk": {"name": "apidepth-python", "version": VERSION},
-    }).encode()
+    payload = json.dumps(
+        {
+            "batch": [
+                {
+                    "vendor": "apidepth-test",
+                    "endpoint": "/test",
+                    "method": "GET",
+                    "status": 200,
+                    "outcome": "success",
+                    "duration_ms": 1,
+                    "cold_start": False,
+                    "env": "test",
+                    "ts": int(time.time() * 1000),
+                    "test": True,
+                }
+            ],
+            "sdk": {"name": "apidepth-python", "version": VERSION},
+        }
+    ).encode()
 
     req = Request(
         url,

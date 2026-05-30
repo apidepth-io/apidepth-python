@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.3.0...apidepth-v0.3.1) (2026-05-30)
+
+
+### Documentation
+
+* add CLI section to README (setup and test subcommands) ([#12](https://github.com/apidepth-io/apidepth-python/issues/12)) ([1ba6a7e](https://github.com/apidepth-io/apidepth-python/commit/1ba6a7ecbf9c77ee66c6479c1e6f86e923cc3662))
+
 ## [0.3.0](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.2.3...apidepth-v0.3.0) (2026-05-30)
 
 

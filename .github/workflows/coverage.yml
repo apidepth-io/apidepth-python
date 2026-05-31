@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
 jobs:
   coverage:
     name: pytest coverage
@@ -35,6 +39,6 @@ jobs:
         run: |
           pytest \
             --cov=apidepth \
-            --cov-fail-under=60 \
+            --cov-fail-under=65 \
             --cov-report=term-missing \
             --cov-report=xml

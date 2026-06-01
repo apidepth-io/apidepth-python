@@ -20,10 +20,10 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Checkout collector (SSRF fixture)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: apidepth-io/apidepth-collector
           token: ${{ secrets.GH_PAT }}
@@ -69,10 +69,10 @@ jobs:
       RESEND_API_KEY: re_test_placeholder
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Checkout collector
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: apidepth-io/apidepth-collector
           token: ${{ secrets.GH_PAT }}

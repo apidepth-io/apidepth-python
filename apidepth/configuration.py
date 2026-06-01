@@ -100,6 +100,7 @@ class Configuration:
             "environment",
             "sample_rate",
             "extra_vendors",
+            "capture_model_names",
         }
     )
 
@@ -115,6 +116,7 @@ class Configuration:
         self.environment: Optional[str] = None
         self.sample_rate: float = 1.0
         self.extra_vendors: Dict[str, str] = {}
+        self.capture_model_names: bool = True
         self._rebuild_ignored_hosts()
 
     @property

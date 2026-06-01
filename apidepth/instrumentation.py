@@ -154,6 +154,7 @@ def _patch_requests() -> None:
                 headers={k.lower(): v for k, v in response.headers.items()},
                 duration_ms=duration_ms,
                 cold_start=cold_start,
+                response=response,
             )
             return response
         except Exception as exc:
@@ -219,6 +220,7 @@ def _patch_httpx() -> None:
                 headers=dict(response.headers),
                 duration_ms=duration_ms,
                 cold_start=cold_start,
+                response=response,
             )
             return response
         except Exception as exc:
@@ -257,6 +259,7 @@ def _patch_httpx() -> None:
                 headers=dict(response.headers),
                 duration_ms=duration_ms,
                 cold_start=cold_start,
+                response=response,
             )
             return response
         except Exception as exc:
@@ -291,6 +294,7 @@ def _record_success(
     headers: Dict[str, str],
     duration_ms: int,
     cold_start: bool,
+    response: Any = None,
 ) -> None:
     """Build and enqueue a successful-response event.
 
@@ -321,27 +325,29 @@ def _record_success(
         now_ms = _now_ms()
 
         from apidepth.rate_limit_headers import extract as extract_rl
+        from apidepth.model_name_extractor import extract as extract_model
 
         rl = extract_rl(headers, now_ms)
+        model_name = extract_model(host, response) if response is not None else None
+
+        attrs: Dict[str, Any] = {
+            "vendor": vendor,
+            "endpoint": endpoint,
+            "method": method,
+            "status": status,
+            "outcome": outcome,
+            "duration_ms": duration_ms,
+            "cold_start": cold_start,
+            "env": _resolve_env(),
+            "ts": now_ms,
+            **(rl or {}),
+        }
+        if model_name:
+            attrs["model_name"] = model_name
 
         from apidepth import collector, event
 
-        collector.Collector.instance().record(
-            event.build(
-                {
-                    "vendor": vendor,
-                    "endpoint": endpoint,
-                    "method": method,
-                    "status": status,
-                    "outcome": outcome,
-                    "duration_ms": duration_ms,
-                    "cold_start": cold_start,
-                    "env": _resolve_env(),
-                    "ts": now_ms,
-                    **(rl or {}),
-                }
-            )
-        )
+        collector.Collector.instance().record(event.build(attrs))
     except Exception:
         pass
 

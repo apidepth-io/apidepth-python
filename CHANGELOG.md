@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.3.1...apidepth-v0.4.0) (2026-06-03)
+
+
+### Features
+
+* add model name extraction from AI vendor response bodies ([#22](https://github.com/apidepth-io/apidepth-python/issues/22)) ([e164481](https://github.com/apidepth-io/apidepth-python/commit/e164481e29d9b7bd54a26fd9d1625fa35c6c6026))
+
 ## [0.3.1](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.3.0...apidepth-v0.3.1) (2026-05-30)
 
 

@@ -1,13 +1,14 @@
 """Tests for apidepth.model_name_extractor.extract()."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from apidepth.model_name_extractor import extract
 
 
-def _mock_response(content_type="application/json", body=b'{"model":"gpt-4-turbo","id":"cmpl-1"}', streaming=False):
+def _mock_response(
+    content_type="application/json", body=b'{"model":"gpt-4-turbo","id":"cmpl-1"}', streaming=False
+):
     """Build a minimal mock response object matching requests/httpx shape."""
     resp = MagicMock()
     resp.headers = MagicMock()
@@ -182,6 +183,7 @@ def test_truncates_body_before_parsing():
 def test_returns_none_when_capture_model_names_disabled():
     resp = _mock_response(body=b'{"model":"gpt-4-turbo"}')
     import apidepth
+
     original = apidepth.get_configuration().capture_model_names
     try:
         apidepth.configure(capture_model_names=False)

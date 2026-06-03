@@ -52,7 +52,11 @@ def extract(host: str, response: Any) -> Optional[str]:
     try:
         ct = ""
         if hasattr(response, "headers"):
-            ct = response.headers.get("content-type", "") if callable(response.headers.get) else str(response.headers.get("content-type", ""))
+            ct = (
+                response.headers.get("content-type", "")
+                if callable(response.headers.get)
+                else str(response.headers.get("content-type", ""))
+            )
         if "application/json" not in ct:
             return None
 

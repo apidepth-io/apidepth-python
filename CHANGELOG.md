@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.4.0...apidepth-v0.4.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* non-blocking registry load, robust model extraction, shared normalization ([#24](https://github.com/apidepth-io/apidepth-python/issues/24)) ([2b67c97](https://github.com/apidepth-io/apidepth-python/commit/2b67c971d699fbf0e12fb5ade572f7a6dc96ce22))
+
 ## [0.4.0](https://github.com/apidepth-io/apidepth-python/compare/apidepth-v0.3.1...apidepth-v0.4.0) (2026-06-03)
 
 

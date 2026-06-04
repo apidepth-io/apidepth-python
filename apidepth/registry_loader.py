@@ -118,9 +118,22 @@ def load_and_start() -> None:
     import apidepth
 
     config = apidepth.get_configuration()
-    registry = _fetch_remote(config) or _load_from_disk(config)
-    if registry:
-        VendorRegistry.replace(registry, config.extra_vendors or {})
+
+    # Apply the on-disk cache synchronously so the registry is populated before
+    # the app starts serving — zero network latency on the boot thread.
+    disk_registry = _load_from_disk(config)
+    if disk_registry:
+        VendorRegistry.replace(disk_registry, config.extra_vendors or {})
+
+    # Fetch the freshest registry from the network on a background thread so a
+    # slow or unreachable endpoint never blocks Django AppConfig.ready / Flask
+    # init_app for up to the full request timeout (PY-020; mirrors the Ruby gem).
+    def _initial_fetch() -> None:
+        registry = _fetch_remote(config)
+        if registry:
+            VendorRegistry.replace(registry, config.extra_vendors or {})
+
+    threading.Thread(target=_initial_fetch, name="apidepth-registry-init", daemon=True).start()
 
     _start_refresh_thread()
 

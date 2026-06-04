@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock
 
-
 from apidepth.model_name_extractor import extract
 
 
@@ -154,24 +153,31 @@ def test_handles_normal_sized_body():
     assert extract("api.openai.com", resp) == "gpt-4o"
 
 
-def test_handles_large_body_without_raising():
-    # Oversized body is truncated before parsing. Truncated JSON is invalid so
-    # extraction returns None — correct behaviour; real AI API responses are tiny.
+def test_handles_large_body_with_model_near_start():
+    # Large body, model at the start — captured regardless of size (PY-018).
     padding = b" " * 20_000
     body = b'{"model":"gpt-4o",' + padding + b'"choices":[]}'
     resp = _mock_response(body=body)
-    # Does not raise — returns None gracefully
-    result = extract("api.openai.com", resp)
-    assert result is None or isinstance(result, str)
+    assert extract("api.openai.com", resp) == "gpt-4o"
 
 
-def test_truncates_body_before_parsing():
-    # Put the model field after the 8KB boundary — should return None, not error
-    prefix = b'{"choices":[],' + b"x" * 8200
-    suffix = b',"model":"gpt-4-late"}'
+def test_captures_model_after_8kb_boundary():
+    # PY-018: embeddings/batch responses put `model` after a large `data` array.
+    # The old parse-after-8KB-truncate dropped it; the regex scan now finds it.
+    prefix = b'{"object":"list","data":["' + b"x" * 8200
+    suffix = b'"],"model":"text-embedding-3-small"}'
     body = prefix + suffix
+    assert len(body) > 8192
     resp = _mock_response(body=body)
-    # model field is beyond 8KB cut, so result is None (malformed truncated JSON)
+    assert extract("api.openai.com", resp) == "text-embedding-3-small"
+
+
+def test_returns_none_when_model_beyond_scan_bound():
+    # A model field past the 256KB scan bound is not captured (work is bounded).
+    from apidepth.model_name_extractor import _MODEL_SCAN_MAX_BYTES
+
+    body = b'{"data":["' + b"x" * _MODEL_SCAN_MAX_BYTES + b'"],"model":"too-far-away"}'
+    resp = _mock_response(body=body)
     assert extract("api.openai.com", resp) is None
 
 

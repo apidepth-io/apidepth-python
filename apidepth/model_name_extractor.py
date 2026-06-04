@@ -8,11 +8,18 @@ Body safety: for requests and httpx non-streaming responses the body is already
 fully buffered by the time the instrumentation wrapper calls this function.
 Streaming responses carry Content-Type: text/event-stream so the JSON guard
 exits before any body access.
+
+Extraction strategy (PY-018): scan for the JSON ``"model": "<value>"`` field
+with a linear regex over the raw bytes rather than ``json.loads`` on a truncated
+body.  Embeddings and batch responses place ``model`` AFTER a large ``data``
+array, so the old parse-after-8KB-truncate approach produced invalid JSON and
+silently dropped the model.  The regex finds the first structural model field
+wherever it sits, up to a generous scan bound.
 """
 
 from __future__ import annotations
 
-import json
+import re
 from typing import Any, Optional
 
 _AI_VENDOR_HOSTS = frozenset(
@@ -25,7 +32,15 @@ _AI_VENDOR_HOSTS = frozenset(
     }
 )
 
-_MAX_BODY_BYTES = 8_192
+#: Upper bound on how far into the body we scan for the model field. 256 KB
+#: comfortably covers realistic embeddings/batch responses (a few-input OpenAI
+#: embeddings body is ~23 KB) while bounding work on pathologically large bodies.
+_MODEL_SCAN_MAX_BYTES = 262_144
+
+#: Matches a structural JSON "model": "<value>" pair in the raw bytes. Escaped
+#: quotes inside string values appear as \" so this never matches a "model"
+#: mentioned inside another JSON string. First match wins (top-level model).
+_MODEL_RE = re.compile(rb'"model"\s*:\s*"([^"]+)"')
 
 
 def extract(host: str, response: Any) -> Optional[str]:
@@ -64,10 +79,11 @@ def extract(host: str, response: Any) -> Optional[str]:
         if not body_bytes:
             return None
 
-        text = body_bytes[:_MAX_BODY_BYTES].decode("utf-8", errors="ignore")
-        data = json.loads(text)
-        model = data.get("model")
-        return model if isinstance(model, str) and model else None
+        match = _MODEL_RE.search(body_bytes[:_MODEL_SCAN_MAX_BYTES])
+        if not match:
+            return None
+        model = match.group(1).decode("utf-8", errors="ignore")
+        return model or None
     except Exception:
         return None
 

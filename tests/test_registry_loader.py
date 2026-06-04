@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +13,31 @@ import apidepth
 import apidepth.registry_loader as rl
 from apidepth.configuration import Configuration
 from apidepth.vendor_registry import BUNDLED_BASELINE, VendorRegistry
+
+
+class _ImmediateThread:
+    """Test double for threading.Thread that runs target() synchronously on start().
+
+    Makes load_and_start's background initial-fetch deterministic without
+    relying on real thread scheduling (PY-020).
+    """
+
+    def __init__(self, target=None, name=None, daemon=None, args=(), kwargs=None):
+        self._target = target
+        self._args = args
+        self._kwargs = kwargs or {}
+        self.name = name
+        self.daemon = daemon
+
+    def start(self):
+        if self._target:
+            self._target(*self._args, **self._kwargs)
+
+    def join(self, timeout=None):
+        pass
+
+    def is_alive(self):
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -524,9 +550,13 @@ def test_start_refresh_thread_returns_started_daemon_thread():
 
 
 def test_load_and_start_uses_remote_registry(cfg, minimal_registry):
+    # Remote fetch now runs on the background init thread (PY-020); _ImmediateThread
+    # runs it synchronously so the assertion is deterministic.
     with (
         patch("apidepth.registry_loader._fetch_remote", return_value=minimal_registry),
+        patch("apidepth.registry_loader._load_from_disk", return_value=None),
         patch("apidepth.registry_loader._start_refresh_thread"),
+        patch("apidepth.registry_loader.threading.Thread", _ImmediateThread),
         patch("apidepth.collector.Collector.register_fork_safety"),
         patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace,
         patch("apidepth.get_configuration", return_value=cfg),
@@ -535,13 +565,16 @@ def test_load_and_start_uses_remote_registry(cfg, minimal_registry):
     mock_replace.assert_called_once_with(minimal_registry, cfg.extra_vendors or {})
 
 
-def test_load_and_start_falls_back_to_disk_when_remote_fails(cfg, minimal_registry):
+def test_load_and_start_applies_disk_cache_synchronously(cfg, minimal_registry):
+    # PY-020: the on-disk cache is applied on the calling thread, before returning,
+    # so the registry is ready before the app serves traffic. Remote fetch fails.
     with (
         patch("apidepth.registry_loader._fetch_remote", return_value=None),
         patch(
             "apidepth.registry_loader._load_from_disk", return_value=minimal_registry
         ) as mock_disk,
         patch("apidepth.registry_loader._start_refresh_thread"),
+        patch("apidepth.registry_loader.threading.Thread", _ImmediateThread),
         patch("apidepth.collector.Collector.register_fork_safety"),
         patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace,
         patch("apidepth.get_configuration", return_value=cfg),
@@ -551,11 +584,41 @@ def test_load_and_start_falls_back_to_disk_when_remote_fails(cfg, minimal_regist
     mock_replace.assert_called_once_with(minimal_registry, cfg.extra_vendors or {})
 
 
+def test_load_and_start_does_not_block_on_slow_remote_fetch(cfg):
+    # PY-020: a slow/unreachable collector must not stall the boot thread. Here
+    # _fetch_remote blocks; load_and_start must return promptly regardless.
+    started = threading.Event()
+    release = threading.Event()
+
+    def _slow_fetch(_cfg):
+        started.set()
+        release.wait(2.0)
+        return None
+
+    try:
+        with (
+            patch("apidepth.registry_loader._fetch_remote", side_effect=_slow_fetch),
+            patch("apidepth.registry_loader._load_from_disk", return_value=None),
+            patch("apidepth.registry_loader._start_refresh_thread"),
+            patch("apidepth.collector.Collector.register_fork_safety"),
+            patch("apidepth.get_configuration", return_value=cfg),
+        ):
+            t0 = time.monotonic()
+            rl.load_and_start()
+            elapsed = time.monotonic() - t0
+
+            assert elapsed < 0.5  # did not wait for the blocked fetch
+            assert started.wait(1.0)  # fetch did run, on a background thread
+    finally:
+        release.set()
+
+
 def test_load_and_start_skips_replace_when_no_registry_available(cfg):
     with (
         patch("apidepth.registry_loader._fetch_remote", return_value=None),
         patch("apidepth.registry_loader._load_from_disk", return_value=None),
         patch("apidepth.registry_loader._start_refresh_thread"),
+        patch("apidepth.registry_loader.threading.Thread", _ImmediateThread),
         patch("apidepth.collector.Collector.register_fork_safety"),
         patch("apidepth.vendor_registry.VendorRegistry.replace") as mock_replace,
         patch("apidepth.get_configuration", return_value=cfg),
@@ -569,6 +632,7 @@ def test_load_and_start_always_starts_refresh_thread(cfg):
         patch("apidepth.registry_loader._fetch_remote", return_value=None),
         patch("apidepth.registry_loader._load_from_disk", return_value=None),
         patch("apidepth.registry_loader._start_refresh_thread") as mock_thread,
+        patch("apidepth.registry_loader.threading.Thread", _ImmediateThread),
         patch("apidepth.collector.Collector.register_fork_safety"),
         patch("apidepth.get_configuration", return_value=cfg),
     ):

@@ -103,15 +103,24 @@ BUNDLED_BASELINE: dict = {
 }
 
 #: Generic path-normalisation rules applied to every request after
-#: vendor-specific patterns.  All three are applied in order so a path
-#: like ``/v1/orgs/abc123def456ghi789jkl012`` first has the UUID pattern
-#: checked (no match), then the numeric pattern (no match), then the token
-#: pattern (matches — replaced with ``/:token``).
+#: vendor-specific patterns. Canonical across all SDKs (XSDK-NORM) — see
+#: apidepth-collector/tests/fixtures/endpoint_cases.json. The :token rule
+#: requires at least one digit ``(?=[a-z0-9]*\d)`` so 24+ char readable slugs
+#: are left intact while opaque IDs/tokens — which effectively always contain a
+#: digit — are collapsed. UUID is case-insensitive.
 _GENERIC_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    (re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"), "/:uuid"),
+    (
+        re.compile(r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE),
+        "/:uuid",
+    ),
     (re.compile(r"/\d{4,}"), "/:id"),
-    (re.compile(r"/[a-f0-9]{24,}", re.IGNORECASE), "/:token"),
+    (re.compile(r"/(?=[a-z0-9]*\d)[a-z0-9]{24,}", re.IGNORECASE), "/:token"),
 ]
+
+#: Upper bound on path length we run the generic normalizers against. Realistic
+#: paths are well under 4 KB; above this we skip normalization because the
+#: :token lookahead is O(n^2) worst-case on a long digit-free alnum run.
+_GENERIC_MAX_PATH = 4096
 
 # Constructs that can enable arbitrary code execution inside Python's re
 # engine or create pathological backtracking.  Legitimate path-normalisation
@@ -324,6 +333,8 @@ def _apply_generic_normalizers(path: str) -> str:
     first match) so a path with both a UUID segment and a numeric segment
     has both replaced.
     """
+    if len(path) > _GENERIC_MAX_PATH:
+        return path
     for pattern, replacement in _GENERIC_PATTERNS:
         path = pattern.sub(replacement, path)
     return path
